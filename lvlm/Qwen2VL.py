@@ -11,6 +11,7 @@ class Qwen2VL:
 
     def __init__(self, version):
         self.version = version
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.build_model()
 
     def build_model(self):
@@ -20,7 +21,7 @@ class Qwen2VL:
             torch_dtype=torch.bfloat16,
             attn_implementation="flash_attention_2",
             device_map="auto",
-        )
+        ).to(self.device)
         self.processor = AutoProcessor.from_pretrained(model_name)
 
     def generate(self, image, question, temp):
@@ -43,7 +44,7 @@ class Qwen2VL:
             videos=video_inputs,
             padding=True,
             return_tensors="pt",
-        ).to(0)
+        ).to(self.device)
         generated_ids = self.model.generate(
             **inputs,
             max_new_tokens=32,

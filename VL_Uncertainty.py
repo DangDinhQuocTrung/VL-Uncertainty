@@ -7,13 +7,18 @@ import random
 import re
 import warnings
 
+import numpy as np
 import torch
 from tqdm import tqdm
+from PIL import Image
 
 from benchmark.LLaVABench import LLaVABench
 from benchmark.MMMU import MMMU
 from benchmark.MMVet import MMVet
 from benchmark.ScienceQA import ScienceQA
+from benchmark.ViLP import ViLP
+from benchmark.MisbehaviorBench import MisbehaviorBench
+
 from llm.Qwen import Qwen
 from lvlm.InternVL import InternVL
 from lvlm.LLaVA import LLaVA
@@ -24,6 +29,7 @@ from util.textual_perturbation import *
 from util.visual_perturbation import *
 
 warnings.filterwarnings("ignore")
+USE_FASTEST = True
 
 
 LVLM_MAP = {
@@ -44,6 +50,8 @@ BENCHMARK_MAP = {
     "LLaVABench": LLaVABench,
     "MMMU": MMMU,
     "ScienceQA": ScienceQA,
+    "ViLP": ViLP,
+    "MisbehaviorBench": MisbehaviorBench,
 }
 
 LLM_MAP = {
@@ -58,14 +66,16 @@ BENCHMARK_TYPE = {
     "LLaVABench": "FREE_FORM",
     "MMMU": "MULTI_CHOICE",
     "ScienceQA": "MULTI_CHOICE",
+    "ViLP": "FREE_FORM",
+    "MisbehaviorBench": "FREE_FORM",
 }
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--lvlm", type=str, default="Qwen2-VL-2B-Instruct")
-    parser.add_argument("--benchmark", type=str, default="MMVet")
-    parser.add_argument("--llm", type=str, default="Qwen2.5-3B-Instruct")
+    parser.add_argument("--benchmark", type=str, default="MisbehaviorBench")
+    parser.add_argument("--llm", type=str, default="Qwen2.5-1.5B-Instruct")
     parser.add_argument("--uncertainty", type=str, default="vl_uncertainty")
     parser.add_argument("--uncertainty_thres", type=float, default=1.0)
     parser.add_argument("--visual_perturbation", type=str, default="blurring")
@@ -413,11 +423,24 @@ def handle_single(args, idx, lvlm, benchmark, llm, log_dict):
         log_dict[idx]["flag_sample_valid"] = False
         return
     log_dict[idx]["flag_sample_valid"] = True
+
+    # Log data
+    image = np.array(sample["img"])
+    print(image.shape, image.dtype, image.min(), image.max())
+    output_dir = "/work3/dida/outputs_LVLM/VL"
+    Image.fromarray(image).save(os.path.join(output_dir, f"{args.benchmark}_{idx}.png"))
+    with open(os.path.join(output_dir, f"{args.benchmark}_{idx}.json"), "w") as f:
+        no_image_sample = sample.copy()
+        no_image_sample.pop("img")
+        json.dump(no_image_sample, f, indent=4)
+
+    # Inference
     infer_single_sample(args, lvlm, sample, False, llm, log_dict)
     if args.uncertainty == "vl_uncertainty":
         vl_uncertainty(args, lvlm, sample, llm, log_dict)
     elif args.uncertainty == "semantic_entropy":
         semantic_entropy(args, lvlm, sample, llm, log_dict)
+    return
 
 
 def handle_batch(args, lvlm, benchmark, llm):
@@ -429,7 +452,8 @@ def handle_batch(args, lvlm, benchmark, llm):
     total = 0
     cnt_correct_detection = 0
     benchmark_size = benchmark.obtain_size()
-    benchmark_size = 2
+    if USE_FASTEST:
+        benchmark_size = min(benchmark_size, 4)
     for idx in tqdm(range(benchmark_size)):
         log_dict[idx] = {}
         handle_single(args, idx, lvlm, benchmark, llm, log_dict)
@@ -446,7 +470,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     if not os.path.exists("exp"):
         os.makedirs("exp")
     with open(f"exp/log_{begin_time_str}.json", "w") as f:
-        json.dump(log_dict, f)
+        json.dump(log_dict, f, indent=4)
     print(f"- Full log is saved at exp/log_dict_{begin_time_str}.json.")
 
 
