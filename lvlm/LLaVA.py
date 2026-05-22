@@ -2,7 +2,11 @@ import warnings
 
 import torch
 from PIL import Image
-from transformers import AutoProcessor, LlavaForConditionalGeneration, BitsAndBytesConfig
+from transformers import (
+    AutoProcessor,
+    LlavaForConditionalGeneration,
+    BitsAndBytesConfig,
+)
 
 warnings.filterwarnings("ignore")
 USE_FASTEST = True
@@ -53,9 +57,11 @@ class LLaVA:
         prompt = self.processor.apply_chat_template(
             conversation, add_generation_prompt=True
         )
-        inputs = self.processor(images=image, text=prompt, return_tensors="pt").to(
-            0, torch.float16
-        ).to(self.device)
+        inputs = (
+            self.processor(images=image, text=prompt, return_tensors="pt")
+            .to(0, torch.float16)
+            .to(self.device)
+        )
         output = self.model.generate(
             **inputs,
             max_new_tokens=32,

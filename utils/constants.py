@@ -11,7 +11,6 @@ from lvlm.LLaVA import LLaVA
 from lvlm.LLaVANeXT import LLaVANeXT
 from lvlm.Qwen2VL import Qwen2VL
 
-
 BLACK_BOX_METHODS = [
     "vl_uncertainty",
     "semantic_entropy",

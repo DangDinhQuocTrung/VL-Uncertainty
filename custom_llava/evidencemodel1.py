@@ -3,6 +3,7 @@ import numpy as np
 import itertools
 import mpmath
 
+
 class EvidenceModel:
     def __init__(self, Beta):
         self.B = Beta
@@ -18,8 +19,8 @@ class EvidenceModel:
         # import pdb;pdb.set_trace()
         J, K = self.B.shape
         with torch.no_grad():
-            B = self.B.to('cuda:0')
-            Phi = Phi.to('cuda:0')
+            B = self.B.to("cuda:0")
+            Phi = Phi.to("cuda:0")
             # M = Phi.unsqueeze(0)
             # M = M.squeeze(1)
             M = Phi
@@ -51,7 +52,6 @@ class EvidenceModel:
     #         self._calculate_basic_terms()
     #     return self.evidence_weights
 
-
     def _calculate_basic_terms(self):
         omega_jk_positive = torch.relu(self.evidence_weights)
         omega_jk_negative = torch.relu(-self.evidence_weights)
@@ -63,18 +63,27 @@ class EvidenceModel:
 
         # Handle zeros in w_pos
         sorted_w_pos = torch.sort(self.w_pos1.flatten())[0]
-        second_smallest = sorted_w_pos[torch.nonzero(sorted_w_pos > 0, as_tuple=True)[0][0]]
+        second_smallest = sorted_w_pos[
+            torch.nonzero(sorted_w_pos > 0, as_tuple=True)[0][0]
+        ]
         w_pos1_copy = self.w_pos1.clone()  # 创建 w_pos1 的副本
         w_pos1_copy[w_pos1_copy == 0] = second_smallest  # 修改副本中的值
         self.w_pos2 = w_pos1_copy  # 将修改后的副本赋值给 w_pos2
         # Handle zeros in w_neg
         sorted_w_neg = torch.sort(self.w_neg1.flatten())[0]
-        second_smallest = sorted_w_neg[torch.nonzero(sorted_w_neg > 0, as_tuple=True)[0][0]]
+        second_smallest = sorted_w_neg[
+            torch.nonzero(sorted_w_neg > 0, as_tuple=True)[0][0]
+        ]
         w_neg1_copy = self.w_neg1.clone()  # 创建 w_neg1 的副本
         w_neg1_copy[w_neg1_copy == 0] = second_smallest  # 修改副本中的值
         self.w_neg2 = w_neg1_copy  # 将修改后的副本赋值给 w_neg2
         # Calculate kappa
-        self.kappa = torch.sum(self.eta_pos_temp.reshape(-1, 1) * (torch.exp(self.w_pos2) - 1) * (1 - self.eta_neg_temp.reshape(-1, 1) * torch.exp(-self.w_neg1)), dim=1)
+        self.kappa = torch.sum(
+            self.eta_pos_temp.reshape(-1, 1)
+            * (torch.exp(self.w_pos2) - 1)
+            * (1 - self.eta_neg_temp.reshape(-1, 1) * torch.exp(-self.w_neg1)),
+            dim=1,
+        )
         self.eta_temp = 1 / (1 - self.kappa)
 
     def get_evidence_conflict(self):
@@ -90,7 +99,7 @@ class EvidenceModel:
     def get_evidence_ignorance(self):
         # 设置 mpmath 的精度
         mpmath.mp.dps = 50  # 50 位十进制精度（大约相当于 128 位二进制精度）
-        
+
         w_neg2_flatten = self.w_neg2.flatten()  # 展平为一维张量
         w_neg2_mp = [mpmath.mpf(x.item()) for x in w_neg2_flatten]
 
@@ -103,12 +112,7 @@ class EvidenceModel:
         w_neg_sum_mp = sum(exp_results_mp)
 
         # 计算 ignorance value
-        ig_mp = (
-            eta_temp_mp *
-            eta_pos_temp_mp *
-            eta_neg_temp_mp *
-            w_neg_sum_mp
-        )
+        ig_mp = eta_temp_mp * eta_pos_temp_mp * eta_neg_temp_mp * w_neg_sum_mp
 
         # 将结果转换回浮点数
         ig = float(ig_mp)
@@ -118,7 +122,9 @@ class EvidenceModel:
     def get_nonspecific(self):
         # Calculate non-specificity value using precomputed terms
         eta_mul = self.eta_temp * self.eta_pos_temp * self.eta_neg_temp
-        prod_term = torch.prod(1 - torch.exp(-self.w_neg2), dim=1, keepdim=True) / (1 - torch.exp(-self.w_neg2))
+        prod_term = torch.prod(1 - torch.exp(-self.w_neg2), dim=1, keepdim=True) / (
+            1 - torch.exp(-self.w_neg2)
+        )
         second_term = (torch.exp(self.w_pos1) - 1) + prod_term
         first_term = eta_mul.reshape(-1, 1) * torch.exp(-self.w_neg2)
         m_theta = first_term * second_term
@@ -134,9 +140,27 @@ class EvidenceModel:
                 m_value = 0
             elif len(theta_set) == 1:
                 k = theta_set[0]
-                m_value = torch.exp(-w_neg[k]) * (torch.exp(w_pos[k]) - 1 + torch.prod(torch.tensor([1 - torch.exp(-w_neg[l]) for l in range(len(w_neg)) if l != k])))
+                m_value = torch.exp(-w_neg[k]) * (
+                    torch.exp(w_pos[k])
+                    - 1
+                    + torch.prod(
+                        torch.tensor(
+                            [
+                                1 - torch.exp(-w_neg[l])
+                                for l in range(len(w_neg))
+                                if l != k
+                            ]
+                        )
+                    )
+                )
             elif len(theta_set) > 1:
-                prod_not_in_A = np.prod([1 - np.exp(-w_neg[k]) for k in range(len(w_neg)) if k not in theta_set])
+                prod_not_in_A = np.prod(
+                    [
+                        1 - np.exp(-w_neg[k])
+                        for k in range(len(w_neg))
+                        if k not in theta_set
+                    ]
+                )
                 prod_in_A = np.prod([np.exp(-w_neg[k]) for k in theta_set])
                 m_value = prod_not_in_A * prod_in_A
             mass_function[theta_set] = m_value

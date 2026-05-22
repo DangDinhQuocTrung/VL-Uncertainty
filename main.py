@@ -12,7 +12,7 @@ import torch
 from tqdm import tqdm
 from PIL import Image
 
-from util.constants import *
+from utils.constants import *
 from methods.vl_uncertainty import *
 
 warnings.filterwarnings("ignore")
@@ -102,7 +102,9 @@ def handle_single(args, idx, lvlm, benchmark, llm, log_dict):
 
     # Inference
     if args.uncertainty in BLACK_BOX_METHODS:
-        estimate_uncertainty_by_vl_or_semantic_entropy(args, lvlm, sample, llm, log_dict)
+        estimate_uncertainty_by_vl_or_semantic_entropy(
+            args, lvlm, sample, llm, log_dict,
+        )
     else:
         raise ValueError(f"Unsupported method: {args.method}")
     return

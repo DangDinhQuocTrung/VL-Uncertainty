@@ -22,8 +22,10 @@ def set_act_get_hooks(model, attn_out=False):
         def hook(module, input, output):
             if "attn_out" in name:
                 new_activation = output[0].squeeze(0).detach()
-                model.activations_[name] = new_activation if name not in model.activations_ else torch.cat(
-                    [model.activations_[name], new_activation], dim=0
+                model.activations_[name] = (
+                    new_activation
+                    if name not in model.activations_
+                    else torch.cat([model.activations_[name], new_activation], dim=0)
                 )
                 # print(f"Hooked {name} with shape {model.activations_[name].shape}")
 
@@ -32,7 +34,11 @@ def set_act_get_hooks(model, attn_out=False):
     hooks = []
     for i in range(model.config.num_hidden_layers):
         if attn_out:
-            hooks.append(model.layers[i].self_attn.register_forward_hook(get_activation(f"attn_out_{i}")))
+            hooks.append(
+                model.layers[i].self_attn.register_forward_hook(
+                    get_activation(f"attn_out_{i}")
+                )
+            )
 
     return hooks
 
@@ -44,7 +50,11 @@ def remove_hooks(hooks):
 
 
 def get_only_attn_out_contribution(
-    model, tokenizer, outputs, text: str, output_start_idx: int,
+    model,
+    tokenizer,
+    outputs,
+    text: str,
+    output_start_idx: int,
 ):
     """
     Get the Attn. Sublayer contribution of the selected object token to the final prediction.
@@ -65,7 +75,9 @@ def get_only_attn_out_contribution(
     """
     selected_token_id = tokenizer(text, add_special_tokens=False)["input_ids"][0]
     # the first index is adoptted if there are multiple occurrences
-    token_in_generation_idx = torch.nonzero(outputs["sequences"][0][1:] == selected_token_id)[0].item()
+    token_in_generation_idx = torch.nonzero(
+        outputs["sequences"][0][1:] == selected_token_id
+    )[0].item()
     final_probs = F.softmax(outputs["scores"][token_in_generation_idx], dim=-1)
     _, topk_token_ids = final_probs.topk(1)
     topk_token_ids = topk_token_ids[0]
@@ -77,8 +89,14 @@ def get_only_attn_out_contribution(
     for layer_i in range(model.model.config.num_hidden_layers):
         # ATTN
         attn_out = (
-            model.model.activations_[f"attn_out_{layer_i}"][output_start_idx + token_in_generation_idx, :]
-            ).clone().detach()
+            (
+                model.model.activations_[f"attn_out_{layer_i}"][
+                    output_start_idx + token_in_generation_idx, :
+                ]
+            )
+            .clone()
+            .detach()
+        )
         proj = linear_projector(attn_out)
         attn_logit = proj.cpu().detach().numpy()
         records_attn.append(attn_logit[topk_token_ids])
@@ -87,7 +105,11 @@ def get_only_attn_out_contribution(
 
 
 def attnw_over_vision_layer_head_selected_text(
-    text: str, outputs, tokenizer, vision_token_start, vision_token_end,
+    text: str,
+    outputs,
+    tokenizer,
+    vision_token_start,
+    vision_token_end,
     sort_heads=False,
 ):
     """
@@ -111,18 +133,25 @@ def attnw_over_vision_layer_head_selected_text(
     try:
         selected_token_id = tokenizer(text, add_special_tokens=False)["input_ids"][0]
         # the first index is adoptted if there are multiple occurrences
-        token_in_generation_idx = torch.nonzero(outputs["sequences"][0][1:] == selected_token_id)[0].item()
+        token_in_generation_idx = torch.nonzero(
+            outputs["sequences"][0][1:] == selected_token_id
+        )[0].item()
     except:
         text = engine.plural(text)
         selected_token_id = tokenizer(text, add_special_tokens=False)["input_ids"][0]
-        token_in_generation_idx = torch.nonzero(outputs["sequences"][0][1:] == selected_token_id)[0].item()
+        token_in_generation_idx = torch.nonzero(
+            outputs["sequences"][0][1:] == selected_token_id
+        )[0].item()
 
     text_attnw_layers_heads = outputs["attentions"][token_in_generation_idx]
-    text_attnw_matrix = torch.zeros((len(text_attnw_layers_heads), text_attnw_layers_heads[0].shape[1]))
+    text_attnw_matrix = torch.zeros(
+        (len(text_attnw_layers_heads), text_attnw_layers_heads[0].shape[1])
+    )
     for i, layer_attnw in enumerate(text_attnw_layers_heads):
         for j, head_attnw in enumerate(layer_attnw.squeeze(0)):
-            text_attnw_matrix[len(text_attnw_layers_heads) - 1 - i, j] = \
+            text_attnw_matrix[len(text_attnw_layers_heads) - 1 - i, j] = (
                 head_attnw[-1][vision_token_start:vision_token_end].sum().item()
+            )
 
     if sort_heads:
         text_attnw_matrix, _ = torch.sort(text_attnw_matrix, dim=1, descending=True)
@@ -132,8 +161,14 @@ def attnw_over_vision_layer_head_selected_text(
 
 
 def logitLens_of_vision_tokens(
-    model, tokenizer, input_ids, outputs, token_range: List[int], layer_range: List[int],
-    logits_warper, logits_processor,
+    model,
+    tokenizer,
+    input_ids,
+    outputs,
+    token_range: List[int],
+    layer_range: List[int],
+    logits_warper,
+    logits_processor,
 ):
     """
     Retrieve the text token in the vocabulary with the highest probability
@@ -163,7 +198,7 @@ def logitLens_of_vision_tokens(
     layer_words = []
     for i in layer_range:
         hidden_state = outputs["hidden_states"][0][i + 1].squeeze(0)
-        hidden_state = hidden_state[token_range[0]:token_range[1]].clone().detach()
+        hidden_state = hidden_state[token_range[0] : token_range[1]].clone().detach()
 
         # llava1.5
         logits = model.lm_head(hidden_state).cpu().float()
@@ -174,8 +209,12 @@ def logitLens_of_vision_tokens(
 
         probs = F.softmax(logits, dim=-1)
         vals, ids = probs.max(dim=-1)
-        layer_max_prob = torch.cat([vals.unsqueeze(0).cpu().detach(), layer_max_prob], dim=0)
-        layer_words.append([tokenizer.decode(id, skip_special_tokens=True) for id in ids])
+        layer_max_prob = torch.cat(
+            [vals.unsqueeze(0).cpu().detach(), layer_max_prob], dim=0
+        )
+        layer_words.append(
+            [tokenizer.decode(id, skip_special_tokens=True) for id in ids]
+        )
 
     # drop the all zero row
     layer_max_prob = layer_max_prob[:-1]
@@ -183,17 +222,25 @@ def logitLens_of_vision_tokens(
 
 
 def logitLens_of_vision_tokens_with_discrete_range(
-    model, tokenizer, input_ids, outputs, vision_token_start: int,
-    discrete_range: List[List[int]], layer_range: List[int],
-    logits_warper, logits_processor, fig_name: str = None,
+    model,
+    tokenizer,
+    input_ids,
+    outputs,
+    vision_token_start: int,
+    discrete_range: List[List[int]],
+    layer_range: List[int],
+    logits_warper,
+    logits_processor,
+    fig_name: str = None,
 ):
     """
     Refer to the function `logitLens_of_vision_tokens` for the detailed description.
     """
-    assert(hasattr(outputs, "hidden_states"))
+    assert hasattr(outputs, "hidden_states")
 
     vision_discrete_range = [
-        [vision_token_start + range_i[0], vision_token_start + range_i[1] + 1] for range_i in discrete_range
+        [vision_token_start + range_i[0], vision_token_start + range_i[1] + 1]
+        for range_i in discrete_range
     ]
 
     each_range_layer_prob_list = []
@@ -204,9 +251,14 @@ def logitLens_of_vision_tokens_with_discrete_range(
     for i, token_range in enumerate(vision_discrete_range):
         x_ticks += np.arange(discrete_range[i][0], discrete_range[i][1] + 1).tolist()
         range_layer_max_prob, layer_words = logitLens_of_vision_tokens(
-            model, tokenizer, input_ids, outputs,
-            token_range, layer_range,
-            logits_warper, logits_processor
+            model,
+            tokenizer,
+            input_ids,
+            outputs,
+            token_range,
+            layer_range,
+            logits_warper,
+            logits_processor,
         )
         each_range_layer_prob_list.append(range_layer_max_prob)
         each_range_layer_words_list.append(layer_words)
@@ -226,13 +278,18 @@ def logitLens_of_vision_tokens_with_discrete_range(
         for layer_i, each_layer_words in enumerate(each_range_layer_words):
             for col_j, word in enumerate(each_layer_words):
                 ax.text(
-                    range_flag + col_j, len(layer_range) - 1 - layer_i,
-                    word, ha="center", va="center", color="w",
-                    fontsize=13, rotation=30,
+                    range_flag + col_j,
+                    len(layer_range) - 1 - layer_i,
+                    word,
+                    ha="center",
+                    va="center",
+                    color="w",
+                    fontsize=13,
+                    rotation=30,
                 )
         range_flag += len(each_layer_words)
 
-    ax.set_xlim(0-0.5, len(x_ticks)-0.5)
+    ax.set_xlim(0 - 0.5, len(x_ticks) - 0.5)
     ax.set_xticks([i for i in range(len(x_ticks))])
     ax.set_yticks([i for i in range(len(layer_range))])
     ax.set_xticklabels(x_ticks, fontsize=16)
