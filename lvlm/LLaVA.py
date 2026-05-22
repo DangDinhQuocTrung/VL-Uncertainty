@@ -75,13 +75,5 @@ class LLaVA:
         )
         return final_ans
 
-    def generate_svar(self, image, question, temp):
-        return
-
-    def generate(self, image, question, temp, mode="default"):
-        if mode == "default":
-            return self.generate_default(image, question, temp)
-        elif mode == "svar":
-            return self.generate_svar(image, question, temp)
-        else:
-            raise ValueError(f"Invalid mode: {mode}")
+    def generate(self, image, question, temp):
+        return self.generate_default(image, question, temp)

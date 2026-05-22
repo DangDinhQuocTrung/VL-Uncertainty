@@ -9,9 +9,9 @@ import torch
 
 from llm.Qwen import Qwen
 from lvlm.InternVL import InternVL
-from util.misc import *
-from util.textual_perturbation import *
-from util.visual_perturbation import *
+from utils.misc import *
+from utils.textual_perturbation import *
+from utils.visual_perturbation import *
 
 
 def handle_demo(lvlm, llm):

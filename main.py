@@ -14,6 +14,8 @@ from PIL import Image
 
 from utils.constants import *
 from methods.vl_uncertainty import *
+from lvlm.model_manager import LLaVAModelManager
+from methods.svar.svar import estimate_uncertainty_by_svar
 
 warnings.filterwarnings("ignore")
 USE_FASTEST = True
@@ -21,11 +23,14 @@ USE_FASTEST = True
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--lvlm", type=str, default="Qwen2-VL-2B-Instruct")
-    parser.add_argument("--benchmark", type=str, default="MisbehaviorBench")
+    parser.add_argument("--lvlm", type=str, default="llava-1.5-7b-hf")
+    parser.add_argument("--use_model_manager", type=bool, default=True)
+    parser.add_argument("--benchmark", type=str, default="ViLP_captioning")
     parser.add_argument("--llm", type=str, default="Qwen2.5-1.5B-Instruct")
-    parser.add_argument("--uncertainty", type=str, default="vl_uncertainty")
+    parser.add_argument("--uncertainty", type=str, default="svar")
     parser.add_argument("--uncertainty_thres", type=float, default=1.0)
+
+    # Perturbation-specific arguments
     parser.add_argument("--visual_perturbation", type=str, default="blurring")
     parser.add_argument(
         "--blur_radius_list", type=float, nargs="+", default=[0.6, 0.8, 1.0, 1.2, 1.4]
@@ -43,6 +48,8 @@ def parse_args():
         default="Given the input question: '{question}', generate a semantically equivalent variation by changing the wording, structure, grammar, or narrative. Ensure the perturbed question maintains the same meaning as the original. Provide only the rephrased question as the output.",
     )
     parser.add_argument("--pair_order", type=str, default="progressively")
+
+    # Sampling-specific arguments
     parser.add_argument("--inference_temp", type=float, default=0.1)
     parser.add_argument("--sampling_temp", type=float, default=1.0)
     parser.add_argument("--sampling_time", type=int, default=5)
@@ -51,7 +58,10 @@ def parse_args():
 
 
 def obtain_lvlm(args):
-    lvlm_class = LVLM_MAP.get(args.lvlm)
+    if args.use_model_manager:
+        return LLaVAModelManager(args.lvlm)
+    else:
+        lvlm_class = LVLM_MAP.get(args.lvlm)
     if not lvlm_class:
         raise ValueError(f"Unsupported LVLM: {args.lvlm}")
     return lvlm_class(args.lvlm)
@@ -105,8 +115,12 @@ def handle_single(args, idx, lvlm, benchmark, llm, log_dict):
         estimate_uncertainty_by_vl_or_semantic_entropy(
             args, lvlm, sample, llm, log_dict,
         )
+    elif args.uncertainty == "svar":
+        estimate_uncertainty_by_svar(
+            args, lvlm, sample, llm, log_dict,
+        )
     else:
-        raise ValueError(f"Unsupported method: {args.method}")
+        raise ValueError(f"Unsupported method: {args.uncertainty}")
     return
 
 

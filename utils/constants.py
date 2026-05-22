@@ -4,6 +4,7 @@ from benchmark.MMVet import MMVet
 from benchmark.ScienceQA import ScienceQA
 from benchmark.ViLP import ViLP
 from benchmark.MisbehaviorBench import MisbehaviorBench
+from benchmark.ViLP_captioning import ViLP_captioning
 
 from llm.Qwen import Qwen
 from lvlm.InternVL import InternVL
@@ -39,6 +40,7 @@ BENCHMARK_MAP = {
     "ScienceQA": ScienceQA,
     "ViLP": ViLP,
     "MisbehaviorBench": MisbehaviorBench,
+    "ViLP_captioning": ViLP_captioning,
 }
 
 LLM_MAP = {
@@ -55,4 +57,5 @@ BENCHMARK_TYPE = {
     "ScienceQA": "MULTI_CHOICE",
     "ViLP": "FREE_FORM",
     "MisbehaviorBench": "FREE_FORM",
+    "ViLP_captioning": "FREE_FORM",
 }

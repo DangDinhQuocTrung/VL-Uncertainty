@@ -3,10 +3,10 @@ import math
 import random
 import collections
 
-from util.misc import *
-from util.textual_perturbation import *
-from util.visual_perturbation import *
-from util.constants import BENCHMARK_TYPE
+from utils.misc import *
+from utils.textual_perturbation import *
+from utils.visual_perturbation import *
+from utils.constants import BENCHMARK_TYPE
 
 
 def perturbation_of_visual_prompt(args, sample):

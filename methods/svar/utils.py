@@ -264,6 +264,8 @@ def logitLens_of_vision_tokens_with_discrete_range(
         each_range_layer_words_list.append(layer_words)
 
     whole_ranges_layer_prob = np.concatenate(each_range_layer_prob_list, axis=1)
+    print(each_range_layer_words_list)
+    return
 
     # plot heatmap
     fig, ax = plt.subplots(figsize=(20, 10), dpi=300)
