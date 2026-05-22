@@ -1,6 +1,7 @@
-from PIL import Image, ImageEnhance, ImageFilter
-import numpy as np
 import random
+
+import numpy as np
+from PIL import Image, ImageEnhance, ImageFilter
 
 
 def image_blurring(image, blur_radius):
@@ -9,11 +10,13 @@ def image_blurring(image, blur_radius):
     except:
         return image
 
+
 def image_rotation(image, angle):
     try:
         return image.rotate(angle)
     except:
         return image
+
 
 def image_flipping(image, direction):
     try:
@@ -24,26 +27,28 @@ def image_flipping(image, direction):
     except:
         return image
 
+
 def image_shifting(image, direction, length):
     try:
         w, h = image.size
-        if direction == 'up':
+        if direction == "up":
             translation = (0, -length)
-        elif direction == 'down':
+        elif direction == "down":
             translation = (0, length)
-        elif direction == 'left':
+        elif direction == "left":
             translation = (-length, 0)
-        elif direction == 'right':
-            translation = (length, 0)        
+        elif direction == "right":
+            translation = (length, 0)
         shifted_image = image.transform(
-            (w, h), 
-            Image.AFFINE, 
+            (w, h),
+            Image.AFFINE,
             (1, 0, translation[0], 0, 1, translation[1]),
-            fillcolor=(0, 0, 0)
+            fillcolor=(0, 0, 0),
         )
         return shifted_image
     except:
         return image
+
 
 def image_cropping(image, scale=0.9):
     try:
@@ -57,6 +62,7 @@ def image_cropping(image, scale=0.9):
         return cropped_image
     except:
         return image
+
 
 def image_erasing(image, erase_l=50, erase_w=50):
     try:
@@ -72,6 +78,7 @@ def image_erasing(image, erase_l=50, erase_w=50):
     except:
         return image
 
+
 def adjust_brightness(image, factor):
     try:
         enhancer = ImageEnhance.Brightness(image)
@@ -79,12 +86,14 @@ def adjust_brightness(image, factor):
     except:
         return image
 
+
 def adjust_contrast(image, factor):
     try:
         enhancer = ImageEnhance.Contrast(image)
         return enhancer.enhance(factor)
     except:
         return image
+
 
 def gaussian_noise(image, degree):
     try:
@@ -98,6 +107,7 @@ def gaussian_noise(image, degree):
     except:
         return image
 
+
 def dropout(image, p):
     try:
         image_array = np.array(image)
@@ -107,6 +117,7 @@ def dropout(image, p):
         return Image.fromarray(dropped_image.astype(np.uint8))
     except:
         return image
+
 
 def salt_and_pepper(image, p):
     try:
@@ -121,6 +132,7 @@ def salt_and_pepper(image, p):
         return Image.fromarray(image_array)
     except Exception as e:
         return image
+
 
 def image_sharpen(image, degree):
     try:

@@ -1,7 +1,9 @@
-import torch
-from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
-from qwen_vl_utils import process_vision_info
 import warnings
+
+import torch
+from qwen_vl_utils import process_vision_info
+from transformers import AutoProcessor, Qwen2VLForConditionalGeneration
+
 warnings.filterwarnings("ignore")
 
 
@@ -14,30 +16,26 @@ class Qwen2VL:
     def build_model(self):
         model_name = f"Qwen/{self.version}"
         self.model = Qwen2VLForConditionalGeneration.from_pretrained(
-                        model_name,
-                        torch_dtype=torch.bfloat16,
-                        attn_implementation="flash_attention_2",
-                        device_map="auto",
-                    )
+            model_name,
+            torch_dtype=torch.bfloat16,
+            attn_implementation="flash_attention_2",
+            device_map="auto",
+        )
         self.processor = AutoProcessor.from_pretrained(model_name)
 
     def generate(self, image, question, temp):
         messages = [
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "image",
-                                    "image": image
-                                },
-                                {
-                                    "type": "text",
-                                    "text": question
-                                }
-                            ]
-                        }
-                    ]
-        text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image},
+                    {"type": "text", "text": question},
+                ],
+            }
+        ]
+        text = self.processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
         image_inputs, video_inputs = process_vision_info(messages)
         inputs = self.processor(
             text=[text],
@@ -55,6 +53,13 @@ class Qwen2VL:
             top_k=50,
             top_p=0.95,
         )
-        generated_ids_trimmed = [out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)]
-        answer = self.processor.batch_decode(generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+        generated_ids_trimmed = [
+            out_ids[len(in_ids) :]
+            for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+        ]
+        answer = self.processor.batch_decode(
+            generated_ids_trimmed,
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        )
         return answer[0]
