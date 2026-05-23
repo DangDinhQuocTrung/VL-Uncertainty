@@ -21,7 +21,7 @@ class LLaVA:
 
     def build_model(self):
         if USE_FASTEST:
-            model_name = "llava-hf/llava-1.5-7b-hf"
+            model_name = f"llava-hf/{self.version}"
             quantization_config = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_compute_dtype=torch.bfloat16,
@@ -33,7 +33,7 @@ class LLaVA:
                 quantization_config=quantization_config,
                 low_cpu_mem_usage=True,
                 attn_implementation="flash_attention_2",
-            ).to(self.device)
+            )
         else:
             model_name = f"llava-hf/{self.version}"
             self.model = LlavaForConditionalGeneration.from_pretrained(

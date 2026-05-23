@@ -11,6 +11,7 @@ from lvlm.InternVL import InternVL
 from lvlm.LLaVA import LLaVA
 from lvlm.LLaVANeXT import LLaVANeXT
 from lvlm.Qwen2VL import Qwen2VL
+from lvlm.Qwen2FVL import Qwen2FVL
 
 BLACK_BOX_METHODS = [
     "vl_uncertainty",
@@ -24,6 +25,7 @@ LVLM_MAP = {
     "Qwen2-VL-72B-Instruct": Qwen2VL,
     "Qwen2-VL-7B-Instruct": Qwen2VL,
     "Qwen2-VL-2B-Instruct": Qwen2VL,
+    "Qwen2.5-VL-7B-Instruct": Qwen2FVL,
     "InternVL2-26B": InternVL,
     "InternVL2-8B": InternVL,
     "InternVL2-1B": InternVL,

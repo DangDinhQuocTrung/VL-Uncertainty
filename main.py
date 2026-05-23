@@ -16,6 +16,7 @@ from utils.constants import *
 from methods.vl_uncertainty import *
 from lvlm.model_manager import LLaVAModelManager
 from methods.svar.svar import estimate_uncertainty_by_svar
+from methods.euq.euq import estimate_uncertainty_by_euq
 
 warnings.filterwarnings("ignore")
 USE_FASTEST = True
@@ -23,11 +24,11 @@ USE_FASTEST = True
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--lvlm", type=str, default="llava-1.5-7b-hf")
-    parser.add_argument("--use_model_manager", type=bool, default=True)
-    parser.add_argument("--benchmark", type=str, default="ViLP_captioning")
+    parser.add_argument("--lvlm", type=str, default="Qwen2.5-VL-7B-Instruct")
+    parser.add_argument("--use_model_manager", type=bool, default=False)
+    parser.add_argument("--benchmark", type=str, default="MisbehaviorBench")
     parser.add_argument("--llm", type=str, default="Qwen2.5-1.5B-Instruct")
-    parser.add_argument("--uncertainty", type=str, default="svar")
+    parser.add_argument("--uncertainty", type=str, default="euq")
     parser.add_argument("--uncertainty_thres", type=float, default=1.0)
 
     # Perturbation-specific arguments
@@ -117,6 +118,10 @@ def handle_single(args, idx, lvlm, benchmark, llm, log_dict):
         )
     elif args.uncertainty == "svar":
         estimate_uncertainty_by_svar(
+            args, lvlm, sample, llm, log_dict,
+        )
+    elif args.uncertainty == "euq":
+        estimate_uncertainty_by_euq(
             args, lvlm, sample, llm, log_dict,
         )
     else:
