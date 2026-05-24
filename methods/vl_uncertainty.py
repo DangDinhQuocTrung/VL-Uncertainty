@@ -255,9 +255,9 @@ def uncertainty_estimation(args, sample, llm, log_dict):
 
 def hallucination_detection(args, sample, log_dict):
     flag_predict_hallucination = (
-        log_dict[sample["idx"]]["uncertainty"] >= args.uncertainty_thres
+        log_dict[sample["idx"]]["uncertainty"] >= args.uncertainty_threshold
     )
-    log_dict[sample["idx"]]["uncertainty_thres"] = args.uncertainty_thres
+    log_dict[sample["idx"]]["uncertainty_threshold"] = args.uncertainty_threshold
     log_dict[sample["idx"]]["flag_predict_hallucination"] = flag_predict_hallucination
 
     flag_detection_correct = (

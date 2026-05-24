@@ -136,8 +136,8 @@ def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
     log_dict[sample["idx"]]["image_score"] = masked_entropy - clean_entropy
 
     log_dict[sample["idx"]]["uncertainty"] = (alpha + 1.0) * clean_entropy - alpha * masked_entropy
-    log_dict[sample["idx"]]["uncertainty_thres"] = args.uncertainty_thres
-    flag_predict_hallucination = log_dict[sample["idx"]]["uncertainty"] >= args.uncertainty_thres
+    log_dict[sample["idx"]]["uncertainty_threshold"] = args.uncertainty_threshold
+    flag_predict_hallucination = log_dict[sample["idx"]]["uncertainty"] >= args.uncertainty_threshold
     log_dict[sample["idx"]]["flag_predict_hallucination"] = flag_predict_hallucination
     flag_detection_correct = (
         log_dict[sample["idx"]]["flag_answer_correct"] and not flag_predict_hallucination

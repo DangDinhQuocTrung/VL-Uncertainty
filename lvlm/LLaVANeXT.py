@@ -9,8 +9,9 @@ warnings.filterwarnings("ignore")
 
 class LLaVANeXT:
 
-    def __init__(self, version):
+    def __init__(self, version, use_fastest=False):
         self.version = version
+        self.use_fastest = use_fastest
         self.build_model()
 
     def build_model(self):

@@ -127,8 +127,9 @@ def load_image(image_file, input_size=448, max_num=12):
 
 class InternVL:
 
-    def __init__(self, version):
+    def __init__(self, version, use_fastest=False):
         self.version = version
+        self.use_fastest = use_fastest
         self.build_model()
 
     def build_model(self):

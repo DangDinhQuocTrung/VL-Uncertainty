@@ -14,7 +14,6 @@ from custom_llava.model.builder import load_pretrained_model
 from methods.svar.utils import set_act_get_hooks, remove_hooks
 
 warnings.filterwarnings("ignore")
-USE_FASTEST = True
 
 # LLaVA-1.5
 IMAGE_TOKEN_INDEX = -200
@@ -34,10 +33,10 @@ INSTRUCTION_TEMPLATE = {
 }
 
 
-def load_llava_model(model_path):
+def load_llava_model(model_path, use_fastest=False):
     # load the model
     load_8bit = False
-    load_4bit = USE_FASTEST
+    load_4bit = use_fastest
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
     model_name = get_model_name_from_path(model_path)
@@ -98,8 +97,9 @@ def prepare_llava_inputs(template, query, image_tensor, tokenizer):
 
 class LLaVAModelManager:
 
-    def __init__(self, model_name):
+    def __init__(self, model_name, use_fastest=False):
         self.model_name = model_name.lower()
+        self.use_fastest = use_fastest
         self.tokenizer = None
         self.vlm_model = None
         self.llm_model = None
@@ -113,7 +113,7 @@ class LLaVAModelManager:
             # model_path = "/work3/dida/cache/hub/models--liuhaotian--llava-v1.5-7b"
             model_path = "liuhaotian/llava-v1.5-7b"
             self.tokenizer, self.vlm_model, self.image_processor, self.llm_model = (
-                load_llava_model(model_path)
+                load_llava_model(model_path, self.use_fastest)
             )
         else:
             raise ValueError(f"Unknown model: {self.model_name}")

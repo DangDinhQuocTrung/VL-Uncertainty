@@ -11,7 +11,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 from PIL import Image
-from torchmetrics.functional import auroc
+from torchmetrics.functional import auroc, precision, recall, accuracy
 
 from utils.constants import *
 from methods.vl_uncertainty import *
@@ -19,19 +19,21 @@ from lvlm.model_manager import LLaVAModelManager
 from methods.svar.svar import estimate_uncertainty_by_svar
 from methods.euq.euq import estimate_uncertainty_by_euq
 from methods.vauq import estimate_uncertainty_by_vauq
+from utils.metrics import compute_f1_score
 
 warnings.filterwarnings("ignore")
-USE_FASTEST = True
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--use_fastest", type=bool, default=True)
     parser.add_argument("--lvlm", type=str, default="Qwen2-VL-2B-Instruct")
     parser.add_argument("--use_model_manager", type=bool, default=False)
     parser.add_argument("--benchmark", type=str, default="ViLP")
     parser.add_argument("--llm", type=str, default="Qwen2.5-1.5B-Instruct")
     parser.add_argument("--uncertainty", type=str, default="vauq")
-    parser.add_argument("--uncertainty_thres", type=float, default=1.0)
+    parser.add_argument("--uncertainty_threshold", type=float, default=1.0)
 
     # Perturbation-specific arguments
     parser.add_argument("--visual_perturbation", type=str, default="blurring")
@@ -62,12 +64,12 @@ def parse_args():
 
 def obtain_lvlm(args):
     if args.use_model_manager:
-        return LLaVAModelManager(args.lvlm)
+        return LLaVAModelManager(args.lvlm, args.use_fastest)
     else:
         lvlm_class = LVLM_MAP.get(args.lvlm)
     if not lvlm_class:
         raise ValueError(f"Unsupported LVLM: {args.lvlm}")
-    return lvlm_class(args.lvlm)
+    return lvlm_class(args.lvlm, args.use_fastest)
 
 
 def obtain_benchmark(args):
@@ -139,7 +141,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     uncertainty_scores = []
     correctness_gt = []
     benchmark_size = benchmark.obtain_size()
-    if USE_FASTEST:
+    if args.use_fastest:
         benchmark_size = min(benchmark_size, 4)
     for idx in tqdm(range(benchmark_size)):
         log_dict[idx] = {}
@@ -154,12 +156,27 @@ def handle_batch(args, lvlm, benchmark, llm):
         uncertainty_scores.append(log_dict[idx]["uncertainty"])
         correctness_gt.append(log_dict[idx]["flag_answer_correct"])
 
+    # Compute metrics
     uncertainty_scores = torch.tensor(uncertainty_scores)
     correctness_gt = torch.tensor(correctness_gt, dtype=torch.int)
     incorrectness_gt = 1 - correctness_gt
+    auroc_score = auroc(uncertainty_scores, incorrectness_gt, task="binary").item()
+    f1_score_result, best_threshold = compute_f1_score(uncertainty_scores, incorrectness_gt, seeking=True)
+    threshold = best_threshold if best_threshold is not None else args.uncertainty_threshold
+    thresholded_uncertainty_scores = (uncertainty_scores >= threshold).float()
+    precision_score = precision(thresholded_uncertainty_scores, incorrectness_gt, task="binary").item()
+    recall_score = recall(thresholded_uncertainty_scores, incorrectness_gt, task="binary").item()
+    accuracy_score = accuracy(thresholded_uncertainty_scores, incorrectness_gt, task="binary").item()
+
+    # Log metrics
     log_dict["Base task Accuracy"] = (cnt_correct_base / total) * 100
     log_dict["Hallucination detection Accuracy"] = (cnt_correct_detection / total) * 100
-    log_dict["Hallucination detection AUC"] = auroc(uncertainty_scores, incorrectness_gt, task="binary").item()
+    log_dict["Hallucination detection AUC"] = auroc_score
+    log_dict["Hallucination detection F1 score"] = f1_score_result
+    log_dict["Hallucination detection Found Threshold"] = threshold
+    log_dict["Hallucination detection Precision"] = precision_score
+    log_dict["Hallucination detection Recall"] = recall_score
+    log_dict["Hallucination detection Found Accuracy"] = accuracy_score
     log_dict["Total samples"] = total
     end_time_str = get_cur_time()
     log_dict["end_time_str"] = end_time_str
@@ -181,8 +198,8 @@ def fix_seed(seed=0):
 
 
 def main():
-    fix_seed(0)
     args = parse_args()
+    fix_seed(args.seed)
     lvlm = obtain_lvlm(args)
     benchmark = obtain_benchmark(args)
     llm = obtain_llm(args)

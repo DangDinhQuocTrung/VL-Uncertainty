@@ -9,8 +9,9 @@ warnings.filterwarnings("ignore")
 
 class Qwen2VL:
 
-    def __init__(self, version):
+    def __init__(self, version, use_fastest=False):
         self.version = version
+        self.use_fastest = use_fastest
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.build_model()
 

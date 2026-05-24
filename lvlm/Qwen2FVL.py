@@ -6,18 +6,18 @@ from qwen_vl_utils import process_vision_info
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration, BitsAndBytesConfig
 
 warnings.filterwarnings("ignore")
-USE_FASTEST = True
 
 
 class Qwen2FVL:
 
-    def __init__(self, version):
+    def __init__(self, version, use_fastest=False):
         self.version = version
+        self.use_fastest = use_fastest
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.build_model()
 
     def build_model(self):
-        if USE_FASTEST:
+        if self.use_fastest:
             model_name = f"Qwen/{self.version}"
             quantization_config = BitsAndBytesConfig(
                 load_in_4bit=True,
