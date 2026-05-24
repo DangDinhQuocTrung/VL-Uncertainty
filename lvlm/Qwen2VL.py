@@ -48,14 +48,14 @@ class Qwen2VL:
         ).to(self.device)
         outputs = self.model.generate(
             **inputs,
-            max_new_tokens=32,
-            do_sample=True,
+            max_new_tokens=64,
+            do_sample=temp > 0.0,
             temperature=temp,
             repetition_penalty=1.05,
             top_k=50,
             top_p=0.95,
-            output_attentions=return_more,
             output_scores=return_more,
+            output_attentions=return_more,
             return_dict_in_generate=return_more,
         )
         generated_ids = outputs["sequences"] if return_more else outputs

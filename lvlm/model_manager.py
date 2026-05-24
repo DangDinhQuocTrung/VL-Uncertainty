@@ -106,7 +106,7 @@ class LLaVAModelManager:
         self.image_processor = None
         self.load_model()
         self.beam = 1
-        self.max_tokens = 512
+        self.max_tokens = 64
 
     def load_model(self):
         if self.model_name == "llava-1.5-7b-hf":
@@ -175,9 +175,10 @@ class LLaVAModelManager:
         with torch.inference_mode():
             outputs = self.llm_model.generate(
                 input_ids,
-                do_sample=False,
-                num_beams=self.beam,
                 max_new_tokens=self.max_tokens,
+                do_sample=temp > 0.0,
+                temperature=temp,
+                num_beams=self.beam,
                 use_cache=True,
                 output_scores=True,
                 output_hidden_states=True,

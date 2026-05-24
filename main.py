@@ -28,11 +28,11 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--use_fastest", type=bool, default=True)
-    parser.add_argument("--lvlm", type=str, default="Qwen2-VL-2B-Instruct")
+    parser.add_argument("--lvlm", type=str, default="Qwen2.5-VL-7B-Instruct")
     parser.add_argument("--use_model_manager", type=bool, default=False)
-    parser.add_argument("--benchmark", type=str, default="ViLP")
-    parser.add_argument("--llm", type=str, default="Qwen2.5-1.5B-Instruct")
-    parser.add_argument("--uncertainty", type=str, default="vauq")
+    parser.add_argument("--benchmark", type=str, default="MisbehaviorBench")
+    parser.add_argument("--llm", type=str, default="Qwen2.5-3B-Instruct")
+    parser.add_argument("--uncertainty", type=str, default="euq")
     parser.add_argument("--uncertainty_threshold", type=float, default=1.0)
 
     # Perturbation-specific arguments
@@ -105,15 +105,15 @@ def handle_single(args, idx, lvlm, benchmark, llm, log_dict):
         return
     log_dict[idx]["flag_sample_valid"] = True
 
-    # Log data
-    image = np.array(sample["img"])
-    print("Image:", image.shape, image.dtype, image.min(), image.max())
-    output_dir = "/work3/dida/outputs_LVLM/VL"
-    Image.fromarray(image).save(os.path.join(output_dir, f"{args.benchmark}_{idx}.png"))
-    with open(os.path.join(output_dir, f"{args.benchmark}_{idx}.json"), "w") as f:
-        no_image_sample = sample.copy()
-        no_image_sample.pop("img")
-        json.dump(no_image_sample, f, indent=4)
+    # Log images
+    # image = np.array(sample["img"])
+    # print("Image:", image.shape, image.dtype, image.min(), image.max())
+    # output_dir = "/work3/dida/outputs_LVLM/VL"
+    # Image.fromarray(image).save(os.path.join(output_dir, f"{args.benchmark}_{idx}.png"))
+    # with open(os.path.join(output_dir, f"{args.benchmark}_{idx}.json"), "w") as f:
+    #     no_image_sample = sample.copy()
+    #     no_image_sample.pop("img")
+    #     json.dump(no_image_sample, f, indent=4)
 
     # Inference
     if args.uncertainty in BLACK_BOX_METHODS:
@@ -141,7 +141,8 @@ def handle_batch(args, lvlm, benchmark, llm):
     uncertainty_scores = []
     correctness_gt = []
     benchmark_size = benchmark.obtain_size()
-    if args.use_fastest:
+    print(f"Benchmark size: {benchmark_size}")
+    if args.use_fastest and False:
         benchmark_size = min(benchmark_size, 4)
     for idx in tqdm(range(benchmark_size)):
         log_dict[idx] = {}
@@ -183,7 +184,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     if not os.path.exists("exp"):
         os.makedirs("exp")
     with open(f"exp/log_{begin_time_str}.json", "w") as f:
-        json.dump(log_dict, f, indent=4)
+        json.dump(log_dict, f)
     print(f"- Full log is saved at exp/log_dict_{begin_time_str}.json.")
 
 

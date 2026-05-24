@@ -102,13 +102,13 @@ class Qwen2FVL:
         # Generation
         generated_ids = self.model.generate(
             **inputs,
-            max_new_tokens=32,
-            output_hidden_states=True,
-            do_sample=True,
+            max_new_tokens=64,
+            do_sample=temp > 0.0,
             temperature=temp,
             repetition_penalty=1.05,
             top_k=50,
             top_p=0.95,
+            output_hidden_states=True,
         )
         generated_ids_trimmed = [
             out_ids[len(in_ids) :]

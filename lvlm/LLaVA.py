@@ -64,11 +64,11 @@ class LLaVA:
         )
         outputs = self.model.generate(
             **inputs,
-            max_new_tokens=32,
-            do_sample=True,
+            max_new_tokens=64,
+            do_sample=temp > 0.0,
             temperature=temp,
-            output_attentions=return_more,
             output_scores=return_more,
+            output_attentions=return_more,
             return_dict_in_generate=return_more,
         )
         answer = outputs["sequences"] if return_more else outputs

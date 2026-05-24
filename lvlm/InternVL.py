@@ -150,8 +150,8 @@ class InternVL:
     def generate(self, image, question, temp):
         pixel_values = load_image(image, max_num=4).to(torch.bfloat16).to(0)
         generation_config = dict(
-            max_new_tokens=32,
-            do_sample=True,
+            max_new_tokens=64,
+            do_sample=temp > 0.0,
             temperature=temp,
         )
         answer = self.model.chat(

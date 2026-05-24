@@ -78,7 +78,7 @@ def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
     total_uncertainty = sample_conflict_value + sample_ignorance_value
 
     # Log the results
-    log_dict[sample["idx"]]["uncertainty"] = total_uncertainty
+    log_dict[sample["idx"]]["uncertainty"] = sample_conflict_value
     log_dict[sample["idx"]]["uncertainty_threshold"] = args.uncertainty_threshold
     flag_predict_hallucination = log_dict[sample["idx"]]["uncertainty"] >= args.uncertainty_threshold
     log_dict[sample["idx"]]["flag_predict_hallucination"] = flag_predict_hallucination

@@ -43,7 +43,10 @@ class LLaVANeXT:
         )
         inputs = self.processor(images=image, text=prompt, return_tensors="pt").to(0)
         output = self.model.generate(
-            **inputs, max_new_tokens=32, do_sample=True, temperature=temp
+            **inputs,
+            max_new_tokens=64,
+            do_sample=temp > 0.0,
+            temperature=temp,
         )
         if "7b" in self.version:
             answer = (

@@ -16,7 +16,7 @@ class MisbehaviorBench:
             "/work3/dida/cache/hub/datasets--TerryHWong--Misbehavior-Bench/snapshots/e65ed548ad57eb5b0e1c5bdf357a23f2b40cfcb0"
         )
         self.task_names = ["hallucination", "jailbreak", "adversarial", "ood"]
-        self.task_name = self.task_names[3]
+        self.task_name = self.task_names[0]
         self.ds = pd.read_csv(self.root_dir / self.task_name / f"{self.task_name}.csv")
 
     def obtain_size(self):
