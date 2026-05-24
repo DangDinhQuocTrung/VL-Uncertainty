@@ -54,6 +54,7 @@ class Qwen2VL:
             top_k=50,
             top_p=0.95,
             output_attentions=return_more,
+            output_scores=return_more,
             return_dict_in_generate=return_more,
         )
         generated_ids = outputs["sequences"] if return_more else outputs

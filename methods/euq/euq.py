@@ -88,4 +88,4 @@ def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
         not log_dict[sample["idx"]]["flag_answer_correct"] and flag_predict_hallucination
     )
     log_dict[sample["idx"]]["flag_detection_correct"] = flag_detection_correct
-    return
+    return log_dict

@@ -68,14 +68,15 @@ class LLaVA:
             do_sample=True,
             temperature=temp,
             output_attentions=return_more,
+            output_scores=return_more,
             return_dict_in_generate=return_more,
         )
         answer = outputs["sequences"] if return_more else outputs
-        final_ans = (
+        final_answer = (
             self.processor.decode(answer[0], skip_special_tokens=True)
             .split("ASSISTANT: ")[-1]
             .strip()
         )
         if return_more:
-            return final_ans, inputs, outputs
-        return final_ans
+            return final_answer, inputs, outputs
+        return final_answer

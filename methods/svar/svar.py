@@ -107,4 +107,4 @@ def estimate_uncertainty_by_svar(args, model_manager, sample, llm, log_dict):
         layer_range,
         logits_warper, logits_processor
     )
-    return
+    return log_dict

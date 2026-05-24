@@ -26,7 +26,7 @@ USE_FASTEST = True
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--lvlm", type=str, default="llava-1.5-7b-hf")
+    parser.add_argument("--lvlm", type=str, default="Qwen2-VL-2B-Instruct")
     parser.add_argument("--use_model_manager", type=bool, default=False)
     parser.add_argument("--benchmark", type=str, default="ViLP")
     parser.add_argument("--llm", type=str, default="Qwen2.5-1.5B-Instruct")
