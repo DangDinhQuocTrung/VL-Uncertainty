@@ -32,7 +32,7 @@ class LLaVA:
                 model_name,
                 quantization_config=quantization_config,
                 low_cpu_mem_usage=True,
-                attn_implementation="flash_attention_2",
+                attn_implementation="eager",
             )
         else:
             model_name = f"llava-hf/{self.version}"
@@ -44,7 +44,7 @@ class LLaVA:
             ).to(self.device)
         self.processor = AutoProcessor.from_pretrained(model_name)
 
-    def generate_default(self, image, question, temp):
+    def generate(self, image, question, temp, return_more=False):
         if isinstance(image, str):
             image = Image.open(image).convert("RGB")
 
@@ -62,18 +62,20 @@ class LLaVA:
             .to(0, torch.float16)
             .to(self.device)
         )
-        output = self.model.generate(
+        outputs = self.model.generate(
             **inputs,
             max_new_tokens=32,
             do_sample=True,
             temperature=temp,
+            output_attentions=return_more,
+            return_dict_in_generate=return_more,
         )
+        answer = outputs["sequences"] if return_more else outputs
         final_ans = (
-            self.processor.decode(output[0], skip_special_tokens=True)
+            self.processor.decode(answer[0], skip_special_tokens=True)
             .split("ASSISTANT: ")[-1]
             .strip()
         )
+        if return_more:
+            return final_ans, inputs, outputs
         return final_ans
-
-    def generate(self, image, question, temp):
-        return self.generate_default(image, question, temp)

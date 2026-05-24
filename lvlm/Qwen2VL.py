@@ -19,12 +19,12 @@ class Qwen2VL:
         self.model = Qwen2VLForConditionalGeneration.from_pretrained(
             model_name,
             torch_dtype=torch.bfloat16,
-            attn_implementation="flash_attention_2",
+            attn_implementation="eager",
             device_map="auto",
         ).to(self.device)
         self.processor = AutoProcessor.from_pretrained(model_name)
 
-    def generate(self, image, question, temp):
+    def generate(self, image, question, temp, return_more=False):
         messages = [
             {
                 "role": "user",
@@ -45,7 +45,7 @@ class Qwen2VL:
             padding=True,
             return_tensors="pt",
         ).to(self.device)
-        generated_ids = self.model.generate(
+        outputs = self.model.generate(
             **inputs,
             max_new_tokens=32,
             do_sample=True,
@@ -53,7 +53,10 @@ class Qwen2VL:
             repetition_penalty=1.05,
             top_k=50,
             top_p=0.95,
+            output_attentions=return_more,
+            return_dict_in_generate=return_more,
         )
+        generated_ids = outputs["sequences"] if return_more else outputs
         generated_ids_trimmed = [
             out_ids[len(in_ids) :]
             for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
@@ -63,4 +66,8 @@ class Qwen2VL:
             skip_special_tokens=True,
             clean_up_tokenization_spaces=False,
         )
-        return answer[0]
+        answer = answer[0]
+
+        if return_more:
+            return answer, inputs, outputs
+        return answer

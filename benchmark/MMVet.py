@@ -16,7 +16,7 @@ class MMVet:
             "idx": idx,
             "img": row["image"],
             "question": question,
-            "gt_ans": row["answer"],
+            "gt_answer": row["answer"],
         }
         return result
 

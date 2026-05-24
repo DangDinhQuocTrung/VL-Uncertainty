@@ -15,7 +15,7 @@ class LLaVABench:
             "idx": idx,
             "img": row["image"],
             "question": row["question"],
-            "gt_ans": row["gpt_answer"],
+            "gt_answer": row["gpt_answer"],
         }
         return result
 

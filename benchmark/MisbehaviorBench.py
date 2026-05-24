@@ -44,7 +44,7 @@ class MisbehaviorBench:
             "idx": idx,
             "img": image,
             "question": question,
-            "gt_ans": answer,
+            "gt_answer": answer,
         }
         return result
 

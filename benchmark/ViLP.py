@@ -20,7 +20,7 @@ class ViLP:
             "idx": idx,
             "img": row[f"image{image_idx}"],
             "question": question,
-            "gt_ans": row[f"answer{image_idx}"],
+            "gt_answer": row[f"answer{image_idx}"],
         }
         return result
 

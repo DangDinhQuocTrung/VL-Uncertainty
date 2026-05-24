@@ -22,7 +22,7 @@ class ViLP_captioning:
             "idx": idx,
             "img": row[f"image{image_idx}"],
             "question": question,
-            "gt_ans": answer,
+            "gt_answer": answer,
         }
         return result
 

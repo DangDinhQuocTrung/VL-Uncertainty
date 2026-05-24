@@ -26,7 +26,7 @@ class ScienceQA:
             "idx": idx,
             "img": row["image"],
             "question": question,
-            "gt_ans": row["answer"],
+            "gt_answer": row["answer"],
             "num_c": len(row["choices"]),
         }
         return result

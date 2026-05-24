@@ -39,7 +39,6 @@ def set_act_get_hooks(model, attn_out=False):
                     get_activation(f"attn_out_{i}")
                 )
             )
-
     return hooks
 
 
@@ -144,6 +143,7 @@ def attnw_over_vision_layer_head_selected_text(
         )[0].item()
 
     text_attnw_layers_heads = outputs["attentions"][token_in_generation_idx]
+    # print("text_attnw_layers_heads:", len(text_attnw_layers_heads), text_attnw_layers_heads[0].shape)
     text_attnw_matrix = torch.zeros(
         (len(text_attnw_layers_heads), text_attnw_layers_heads[0].shape[1])
     )

@@ -68,12 +68,12 @@ class MMMU:
         question += f"This is a single choice question, answer only with choice number in {choice_numbers}."
         letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         mapping = {L: N for N, L in enumerate(letters)}
-        gt_ans = mapping[row["answer"]]
+        gt_answer = mapping[row["answer"]]
         result = {
             "idx": idx,
             "img": row["image_1"],
             "question": question,
-            "gt_ans": gt_ans,
+            "gt_answer": gt_answer,
             "num_c": len(options),
         }
         return result

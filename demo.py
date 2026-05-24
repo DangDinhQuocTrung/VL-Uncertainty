@@ -18,7 +18,7 @@ def handle_demo(lvlm, llm):
     sample = {}
     sample["img"] = Image.open(".asset/img/titanic.png")
     sample["question"] = "What is the name of this movie?"
-    sample["gt_ans"] = "Titanic."
+    sample["gt_answer"] = "Titanic."
     print("-" * 50)
     print("- Demo image: .asset/img/titanic.png")
     print("- Question: What is the name of this movie?")
@@ -27,19 +27,19 @@ def handle_demo(lvlm, llm):
 
     ans = lvlm.generate(sample["img"], sample["question"], 0.1)
     print(f"- LVLM answer: {ans}")
-    flag_ans_correct = True
-    question = f"Ground truth: {sample['gt_ans']}. Model answer: {ans}. Please verify if the model ans matches the ground truth. Respond with either 'Correct' or 'Wrong' only."
-    llm_ans_check = llm.generate(question, 0.1)
-    flag_ans_correct = (
-        "Correct" in llm_ans_check
-        or "correct" in llm_ans_check
-        or "C" in llm_ans_check
-        or "c" in llm_ans_check
+    flag_answer_correct = True
+    question = f"Ground truth: {sample['gt_answer']}. Model answer: {ans}. Please verify if the model ans matches the ground truth. Respond with either 'Correct' or 'Wrong' only."
+    llm_answer_check = llm.generate(question, 0.1)
+    flag_answer_correct = (
+        "Correct" in llm_answer_check
+        or "correct" in llm_answer_check
+        or "C" in llm_answer_check
+        or "c" in llm_answer_check
     )
-    print(f"- LVLM answer accuracy: {'Correct' if flag_ans_correct else 'Wrong'}")
+    print(f"- LVLM answer accuracy: {'Correct' if flag_answer_correct else 'Wrong'}")
     print("-" * 50)
 
-    ans_sampling_list = []
+    answer_sampling_list = []
     perturbed_img_list = []
     for radius in [1, 2, 3, 4, 5]:
         perturbed_img_list.append(image_blurring(sample["img"], radius))
@@ -56,21 +56,21 @@ def handle_demo(lvlm, llm):
         )
     for i in range(5):
         ans = lvlm.generate(perturbed_img_list[i], perturbed_question_list[i], 1.0)
-        ans_sampling_list.append(ans)
+        answer_sampling_list.append(ans)
 
-    ans_cluster_idx = [-1] * len(ans_sampling_list)
+    answer_cluster_idx = [-1] * len(answer_sampling_list)
     cur_cluster_idx = 0
-    for i in range(len(ans_sampling_list)):
-        if ans_cluster_idx[i] == -1:
-            ans_cluster_idx[i] = cur_cluster_idx
-            for j in range(i + 1, len(ans_sampling_list)):
-                if ans_cluster_idx[j] == -1:
+    for i in range(len(answer_sampling_list)):
+        if answer_cluster_idx[i] == -1:
+            answer_cluster_idx[i] = cur_cluster_idx
+            for j in range(i + 1, len(answer_sampling_list)):
+                if answer_cluster_idx[j] == -1:
                     entailment_ij = llm.generate(
-                        f"Does '{ans_sampling_list[i]}' entail '{ans_sampling_list[j]}'? Respond with either 'Yes' or 'No' only.",
+                        f"Does '{answer_sampling_list[i]}' entail '{answer_sampling_list[j]}'? Respond with either 'Yes' or 'No' only.",
                         0.1,
                     )
                     entailment_ji = llm.generate(
-                        f"Does '{ans_sampling_list[j]}' entail '{ans_sampling_list[i]}'? Respond with either 'Yes' or 'No' only.",
+                        f"Does '{answer_sampling_list[j]}' entail '{answer_sampling_list[i]}'? Respond with either 'Yes' or 'No' only.",
                         0.1,
                     )
                     i_to_j = (
@@ -86,9 +86,9 @@ def handle_demo(lvlm, llm):
                         or "y" in entailment_ji
                     )
                     if i_to_j and j_to_i:
-                        ans_cluster_idx[j] = cur_cluster_idx
+                        answer_cluster_idx[j] = cur_cluster_idx
             cur_cluster_idx += 1
-    cluster_dis = collections.Counter(ans_cluster_idx)
+    cluster_dis = collections.Counter(answer_cluster_idx)
     uncertainty = -sum((cnt / 5) * math.log2(cnt / 5) for cnt in cluster_dis.values())
     print(f"- Estimated uncertianty: {uncertainty}")
     flag_predict_hallucination = uncertainty >= 1.0
@@ -98,8 +98,8 @@ def handle_demo(lvlm, llm):
     print(
         f"- Hallucination prediction: {'Is hallucination' if flag_predict_hallucination else 'Is not hallucination'}"
     )
-    flag_detection_correct = (flag_ans_correct and not flag_predict_hallucination) or (
-        not flag_ans_correct and flag_predict_hallucination
+    flag_detection_correct = (flag_answer_correct and not flag_predict_hallucination) or (
+        not flag_answer_correct and flag_predict_hallucination
     )
     print(
         f"- Hallucination detection: {'Success!' if flag_detection_correct else 'Fail'}"

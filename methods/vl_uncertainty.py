@@ -165,59 +165,59 @@ def combination_of_perturbed_prompt(
 
 
 def infer_single_sample(args, lvlm, sample, is_sampling, llm, log_dict):
-    ans = lvlm.generate(
+    answer = lvlm.generate(
         sample["img"],
         sample["question"],
         args.inference_temp if not is_sampling else args.sampling_temp,
     )
     if not is_sampling:
-        log_dict[sample["idx"]]["ans"] = ans
-        flag_ans_correct = True
+        log_dict[sample["idx"]]["answer"] = answer
+        flag_answer_correct = True
         if BENCHMARK_TYPE[args.benchmark] == "MULTI_CHOICE":
-            flag_ans_correct = str(sample["gt_ans"]) in ans
+            flag_answer_correct = str(sample["gt_answer"]) in answer
         else:
-            question = f"Ground truth: {sample['gt_ans']}. Model answer: {ans}. Please verify if the model ans matches the ground truth. Respond with either 'Correct' or 'Wrong' only."
-            llm_ans_check = llm.generate(question, 0.1)
-            log_dict[sample["idx"]]["llm_ans_check"] = llm_ans_check
-            flag_ans_correct = (
-                "Correct" in llm_ans_check
-                or "correct" in llm_ans_check
-                or "C" in llm_ans_check
-                or "c" in llm_ans_check
+            question = f"Ground truth: {sample['gt_answer']}. Model answer: {answer}. Please verify if the model answer matches the ground truth. Respond with either 'Correct' or 'Wrong' only."
+            llm_answer_check = llm.generate(question, 0.1)
+            log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
+            flag_answer_correct = (
+                "Correct" in llm_answer_check
+                or "correct" in llm_answer_check
+                or "C" in llm_answer_check
+                or "c" in llm_answer_check
             )
-        log_dict[sample["idx"]]["flag_ans_correct"] = flag_ans_correct
+        log_dict[sample["idx"]]["flag_answer_correct"] = flag_answer_correct
     else:
-        log_dict[sample["idx"]]["ans_sampling_list"].append(ans)
+        log_dict[sample["idx"]]["answer_sampling_list"].append(answer)
     return
 
 
 def uncertainty_estimation(args, sample, llm, log_dict):
-    ans_sampling_list = log_dict[sample["idx"]]["ans_sampling_list"]
-    ans_cluster_idx = []
+    answer_sampling_list = log_dict[sample["idx"]]["answer_sampling_list"]
+    answer_cluster_idx = []
     if BENCHMARK_TYPE[args.benchmark] == "MULTI_CHOICE":
-        for ans in ans_sampling_list:
+        for answer in answer_sampling_list:
             if (
-                re.search(r"\d+", ans) is None
-                or int(re.search(r"\d+", ans).group()) >= sample["num_c"]
+                re.search(r"\d+", answer) is None
+                or int(re.search(r"\d+", answer).group()) >= sample["num_c"]
             ):
-                ans_cluster_idx.append(-1)
+                answer_cluster_idx.append(-1)
             else:
-                ans_cluster_idx.append(int(re.search(r"\d+", ans).group()))
+                answer_cluster_idx.append(int(re.search(r"\d+", answer).group()))
     else:
-        ans_cluster_idx = [-1] * len(ans_sampling_list)
+        answer_cluster_idx = [-1] * len(answer_sampling_list)
         cur_cluster_idx = 0
         log_dict[sample["idx"]]["entailment"] = {}
-        for i in range(len(ans_sampling_list)):
-            if ans_cluster_idx[i] == -1:
-                ans_cluster_idx[i] = cur_cluster_idx
-                for j in range(i + 1, len(ans_sampling_list)):
-                    if ans_cluster_idx[j] == -1:
+        for i in range(len(answer_sampling_list)):
+            if answer_cluster_idx[i] == -1:
+                answer_cluster_idx[i] = cur_cluster_idx
+                for j in range(i + 1, len(answer_sampling_list)):
+                    if answer_cluster_idx[j] == -1:
                         entailment_ij = llm.generate(
-                            f"Does '{ans_sampling_list[i]}' entail '{ans_sampling_list[j]}'? Respond with either 'Yes' or 'No' only.",
+                            f"Does '{answer_sampling_list[i]}' entail '{answer_sampling_list[j]}'? Respond with either 'Yes' or 'No' only.",
                             0.1,
                         )
                         entailment_ji = llm.generate(
-                            f"Does '{ans_sampling_list[j]}' entail '{ans_sampling_list[i]}'? Respond with either 'Yes' or 'No' only.",
+                            f"Does '{answer_sampling_list[j]}' entail '{answer_sampling_list[i]}'? Respond with either 'Yes' or 'No' only.",
                             0.1,
                         )
                         log_dict[sample["idx"]]["entailment"][
@@ -239,12 +239,12 @@ def uncertainty_estimation(args, sample, llm, log_dict):
                             or "y" in entailment_ji
                         )
                         if i_to_j and j_to_i:
-                            ans_cluster_idx[j] = cur_cluster_idx
+                            answer_cluster_idx[j] = cur_cluster_idx
                 cur_cluster_idx += 1
 
-    log_dict[sample["idx"]]["ans_cluster_idx"] = ans_cluster_idx
+    log_dict[sample["idx"]]["answer_cluster_idx"] = answer_cluster_idx
 
-    cluster_dis = collections.Counter(ans_cluster_idx)
+    cluster_dis = collections.Counter(answer_cluster_idx)
     log_dict[sample["idx"]]["cluster_dis"] = cluster_dis
     uncertainty = -sum(
         (cnt / args.sampling_time) * math.log2(cnt / args.sampling_time)
@@ -261,9 +261,9 @@ def hallucination_detection(args, sample, log_dict):
     log_dict[sample["idx"]]["flag_predict_hallucination"] = flag_predict_hallucination
 
     flag_detection_correct = (
-        log_dict[sample["idx"]]["flag_ans_correct"] and not flag_predict_hallucination
+        log_dict[sample["idx"]]["flag_answer_correct"] and not flag_predict_hallucination
     ) or (
-        not log_dict[sample["idx"]]["flag_ans_correct"] and flag_predict_hallucination
+        not log_dict[sample["idx"]]["flag_answer_correct"] and flag_predict_hallucination
     )
     log_dict[sample["idx"]]["flag_detection_correct"] = flag_detection_correct
 
@@ -276,7 +276,7 @@ def vl_uncertainty(args, lvlm, sample, llm, log_dict):
         args, sample, perturbed_img_list, perturbed_question_list, log_dict
     )
 
-    log_dict[sample["idx"]]["ans_sampling_list"] = []
+    log_dict[sample["idx"]]["answer_sampling_list"] = []
     for i in range(args.sampling_time):
         infer_single_sample(args, lvlm, perturbed_prompt_list[i], True, llm, log_dict)
 
@@ -285,7 +285,7 @@ def vl_uncertainty(args, lvlm, sample, llm, log_dict):
 
 
 def semantic_entropy(args, lvlm, sample, llm, log_dict):
-    log_dict[sample["idx"]]["ans_sampling_list"] = []
+    log_dict[sample["idx"]]["answer_sampling_list"] = []
     for _ in range(args.sampling_time):
         infer_single_sample(args, lvlm, sample, True, llm, log_dict)
 
