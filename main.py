@@ -170,8 +170,8 @@ def handle_batch(args, lvlm, benchmark, llm):
     accuracy_score = accuracy(thresholded_uncertainty_scores, incorrectness_gt, task="binary").item()
 
     # Log metrics
-    log_dict["Base task Accuracy"] = (cnt_correct_base / total) * 100
-    log_dict["Hallucination detection Accuracy"] = (cnt_correct_detection / total) * 100
+    log_dict["Base task Accuracy"] = (cnt_correct_base / total)
+    log_dict["Hallucination detection Accuracy"] = (cnt_correct_detection / total)
     log_dict["Hallucination detection AUC"] = auroc_score
     log_dict["Hallucination detection F1 score"] = f1_score_result
     log_dict["Hallucination detection Found Threshold"] = threshold
