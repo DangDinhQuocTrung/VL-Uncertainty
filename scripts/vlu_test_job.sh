@@ -3,7 +3,7 @@
 #BSUB -J testing_vlu
 #BSUB -n 8
 #BSUB -gpu "num=1:mode=exclusive_process"
-#BSUB -W 23:50
+#BSUB -W 10:50
 #BSUB -R "rusage[mem=16GB]"
 #BSUB -R "span[hosts=1]"
 #BSUB -u dida@dtu.dk
@@ -12,16 +12,16 @@
 #BSUB -eo /zhome/05/8/227717/logs/testing_vlu_%J.err
 set -e
 
-# SEED=$1
-# BENCHMARK=$2
-# LVLM=$3
-# USE_MODEL_MANAGER=$4
-# USE_FASTEST=$5
-# LLM=$6
-# UNCERTAINTY=$7
-# INFERENCE_TEMP=$8
-# SAMPLING_TEMP=$9
-# SAMPLING_TIME=${10}
+echo "SEED: ${SEED}"
+echo "BENCHMARK: ${BENCHMARK}"
+echo "LVLM: ${LVLM}"
+echo "USE_MODEL_MANAGER: ${USE_MODEL_MANAGER}"
+echo "USE_FASTEST: ${USE_FASTEST}"
+echo "LLM: ${LLM}"
+echo "UNCERTAINTY: ${UNCERTAINTY}"
+echo "INFERENCE_TEMP: ${INFERENCE_TEMP}"
+echo "SAMPLING_TEMP: ${SAMPLING_TEMP}"
+echo "SAMPLING_TIME: ${SAMPLING_TIME}"
 
 ROOT_DIR=/work3/dida
 USER_DIR=/zhome/05/8/227717

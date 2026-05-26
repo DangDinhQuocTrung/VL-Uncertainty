@@ -15,16 +15,16 @@ for seed in ${seeds[@]}; do
     export INFERENCE_TEMP=0.1
     export SAMPLING_TEMP=1.0
     export SAMPLING_TIME=5
-    bsub < ./vlu_test_job.sh
+    bsub -env "all" < ./vlu_test_job.sh
 
     export UNCERTAINTY=vauq
     export INFERENCE_TEMP=0.0
-    bsub < ./vlu_test_job.sh
+    bsub -env "all" < ./vlu_test_job.sh
 
     export UNCERTAINTY=svar
     export USE_MODEL_MANAGER=True
     export INFERENCE_TEMP=0.0
-    bsub < ./vlu_test_job.sh
+    bsub -env "all" < ./vlu_test_job.sh
     export USE_MODEL_MANAGER=False
 
     export BENCHMARK=MisbehaviorBench
@@ -32,6 +32,6 @@ for seed in ${seeds[@]}; do
     export USE_FASTEST=True
     export UNCERTAINTY=euq
     export INFERENCE_TEMP=0.0
-    bsub < ./vlu_test_job.sh
+    bsub -env "all" < ./vlu_test_job.sh
     export USE_FASTEST=False
 done
