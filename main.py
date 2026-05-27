@@ -59,6 +59,7 @@ def parse_args():
     parser.add_argument("--sampling_temp", type=float, default=1.0)
     parser.add_argument("--sampling_time", type=int, default=5)
     args = parser.parse_args()
+    print(vars(args))
     return args
 
 
