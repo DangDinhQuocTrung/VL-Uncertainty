@@ -73,9 +73,10 @@ def get_only_attn_out_contribution(
         the attention contribution over layers
     """
     selected_token_id = tokenizer(text, add_special_tokens=False)["input_ids"][0]
-    # the first index is adoptted if there are multiple occurrences
+    # the first index is adopted if there are multiple occurrences
     token_in_generation_idx = torch.nonzero(
-        outputs["sequences"][0][1:] == selected_token_id
+        # outputs["sequences"][0][1:] == selected_token_id
+        outputs["sequences"][0][0:] == selected_token_id
     )[0].item()
     final_probs = F.softmax(outputs["scores"][token_in_generation_idx], dim=-1)
     _, topk_token_ids = final_probs.topk(1)
@@ -133,13 +134,15 @@ def attnw_over_vision_layer_head_selected_text(
         selected_token_id = tokenizer(text, add_special_tokens=False)["input_ids"][0]
         # the first index is adoptted if there are multiple occurrences
         token_in_generation_idx = torch.nonzero(
-            outputs["sequences"][0][1:] == selected_token_id
+            # outputs["sequences"][0][1:] == selected_token_id
+            outputs["sequences"][0][0:] == selected_token_id
         )[0].item()
     except:
         text = engine.plural(text)
         selected_token_id = tokenizer(text, add_special_tokens=False)["input_ids"][0]
         token_in_generation_idx = torch.nonzero(
-            outputs["sequences"][0][1:] == selected_token_id
+            # outputs["sequences"][0][1:] == selected_token_id
+            outputs["sequences"][0][0:] == selected_token_id
         )[0].item()
 
     text_attnw_layers_heads = outputs["attentions"][token_in_generation_idx]

@@ -2,36 +2,14 @@
 set -e
 
 declare -a seeds=(0)
+export LLM=Qwen2.5-3B-Instruct
 
 for seed in ${seeds[@]}; do
-    export SEED=${seed}
-    export BENCHMARK=ViLP
-    export LVLM=llava-1.5-7b-hf
-    export USE_MODEL_MANAGER=False
-    export USE_FASTEST=False
-    export LLM=Qwen2.5-3B-Instruct
+    # bsub -env "SEED=${seed},BENCHMARK=ViLP,LVLM=llava-1.5-7b-hf,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=vl_uncertainty,INFERENCE_TEMP=0.1,SAMPLING_TEMP=1.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
 
-    export UNCERTAINTY=vl_uncertainty
-    export INFERENCE_TEMP=0.1
-    export SAMPLING_TEMP=1.0
-    export SAMPLING_TIME=5
-    bsub -env "all" < ./vlu_test_job.sh
+    bsub -env "SEED=${seed},BENCHMARK=ViLP,LVLM=llava-1.5-7b-hf,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=vauq,INFERENCE_TEMP=0.0,SAMPLING_TEMP=0.0,SAMPLING_TIME=0" < ./vlu_test_job.sh
 
-    export UNCERTAINTY=vauq
-    export INFERENCE_TEMP=0.0
-    bsub -env "all" < ./vlu_test_job.sh
+    bsub -env "SEED=${seed},BENCHMARK=ViLP,LVLM=llava-1.5-7b-hf,USE_MODEL_MANAGER=True,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=svar,INFERENCE_TEMP=0.0,SAMPLING_TEMP=0.0,SAMPLING_TIME=0" < ./vlu_test_job.sh
 
-    export UNCERTAINTY=svar
-    export USE_MODEL_MANAGER=True
-    export INFERENCE_TEMP=0.0
-    bsub -env "all" < ./vlu_test_job.sh
-    export USE_MODEL_MANAGER=False
-
-    export BENCHMARK=MisbehaviorBench
-    export LVLM=Qwen2.5-VL-7B-Instruct
-    export USE_FASTEST=True
-    export UNCERTAINTY=euq
-    export INFERENCE_TEMP=0.0
-    bsub -env "all" < ./vlu_test_job.sh
-    export USE_FASTEST=False
+    bsub -env "SEED=${seed},BENCHMARK=MisbehaviorBench,LVLM=Qwen2.5-VL-7B-Instruct,USE_MODEL_MANAGER=False,USE_FASTEST=True,LLM=${LLM},UNCERTAINTY=euq,INFERENCE_TEMP=0.0,SAMPLING_TEMP=0.0,SAMPLING_TIME=0" < ./vlu_test_job.sh
 done

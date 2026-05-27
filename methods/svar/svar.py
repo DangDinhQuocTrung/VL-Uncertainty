@@ -41,8 +41,9 @@ def estimate_uncertainty_by_svar(args, model_manager, sample, llm, log_dict):
     doc = nlp(sample["gt_answer"])
     gt_words = [token.lemma_.lower() for token in doc if not token.is_punct]
     doc = nlp(answer)
-    generated_words = [token.lemma_.lower() for token in doc if not token.is_punct]
-    print(answer)
+    # generated_words = [token.lemma_.lower() for token in doc if not token.is_punct]
+    generated_words = [str(token) for token in doc]
+    # print(answer, generated_words)
 
     # Real words Calculation
     log_dict[sample["idx"]]["real_attn_contribution_across_layers"] = []
@@ -52,7 +53,7 @@ def estimate_uncertainty_by_svar(args, model_manager, sample, llm, log_dict):
     words_to_calculate = set(generated_words)
     for ri, real_word in enumerate(words_to_calculate):
         # Calculate attn sublayer contribution for each real word
-        print(real_word)
+        # print(real_word)
         try:
             # Get attn sublayer contribution
             _records = get_only_attn_out_contribution(
@@ -76,7 +77,7 @@ def estimate_uncertainty_by_svar(args, model_manager, sample, llm, log_dict):
             print(f"'{real_word}' not found in the generated text.")
 
     # Log the results
-    log_dict[sample["idx"]]["uncertainty"] = sum(log_dict[sample["idx"]]["real_SVAR_5_18"]) / len(log_dict[sample["idx"]]["real_SVAR_5_18"])
+    log_dict[sample["idx"]]["uncertainty"] = sum(log_dict[sample["idx"]]["real_SVAR_5_18"]) / max(len(log_dict[sample["idx"]]["real_SVAR_5_18"]), 1)
     log_dict[sample["idx"]]["uncertainty_threshold"] = args.uncertainty_threshold
     flag_predict_hallucination = log_dict[sample["idx"]]["uncertainty"] >= args.uncertainty_threshold
     log_dict[sample["idx"]]["flag_predict_hallucination"] = flag_predict_hallucination
@@ -86,6 +87,7 @@ def estimate_uncertainty_by_svar(args, model_manager, sample, llm, log_dict):
         not log_dict[sample["idx"]]["flag_answer_correct"] and flag_predict_hallucination
     )
     log_dict[sample["idx"]]["flag_detection_correct"] = flag_detection_correct
+    return log_dict
 
     # Lens
     discrete_range = [
