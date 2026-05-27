@@ -5,7 +5,7 @@ declare -a seeds=(0)
 export LLM=Qwen2.5-3B-Instruct
 
 for seed in ${seeds[@]}; do
-    # bsub -env "SEED=${seed},BENCHMARK=ViLP,LVLM=llava-1.5-7b-hf,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=vl_uncertainty,INFERENCE_TEMP=0.1,SAMPLING_TEMP=1.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
+    bsub -env "SEED=${seed},BENCHMARK=ViLP,LVLM=llava-1.5-7b-hf,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=vl_uncertainty,INFERENCE_TEMP=0.1,SAMPLING_TEMP=1.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
 
     bsub -env "SEED=${seed},BENCHMARK=ViLP,LVLM=llava-1.5-7b-hf,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=vauq,INFERENCE_TEMP=0.0,SAMPLING_TEMP=0.0,SAMPLING_TIME=0" < ./vlu_test_job.sh
 
