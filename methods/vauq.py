@@ -73,6 +73,7 @@ def generate_with_masked_visual_tokens(model, inputs, top_k_visual_positions, mo
 def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
     K = 40
     alpha = 1.0
+    device = lvlm.device
 
     # Generate answer
     answer, inputs, outputs = lvlm.generate(
@@ -114,8 +115,8 @@ def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
     vision_token_end_index = visual_token_positions.max().item()
     generation_steps = len(outputs["attentions"])
     num_layers = len(outputs["attentions"][0])
-    layer_range = [5, 10]
-    sum_attention_over_vision_tokens = torch.zeros(vision_token_end_index - vision_token_start_index).to(outputs["attentions"][0][0].device)
+    layer_range = [10, 25]
+    sum_attention_over_vision_tokens = torch.zeros(vision_token_end_index - vision_token_start_index).to(device)
     for step_index in range(1, generation_steps):
         for layer_index in range(layer_range[0], layer_range[1]):
             attention_values = outputs["attentions"][step_index][layer_index][
