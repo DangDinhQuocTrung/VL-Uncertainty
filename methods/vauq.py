@@ -112,7 +112,7 @@ def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
 
     visual_token_positions = (inputs["input_ids"][0] == image_token_id).nonzero(as_tuple=True)[0]
     vision_token_start_index = visual_token_positions.min().item()
-    vision_token_end_index = visual_token_positions.max().item()
+    vision_token_end_index = visual_token_positions.max().item() + 1
     generation_steps = len(outputs["attentions"])
     num_layers = len(outputs["attentions"][0])
     layer_range = [10, 25]

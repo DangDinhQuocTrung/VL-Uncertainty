@@ -26,17 +26,22 @@ class EvidenceModel:
             M = Phi.view(-1, 1)
             B_star = B - B.mean(axis=1, keepdims=True)
             # print(B_star.shape, M.shape, J, K)
+            # Where are A_star and B_star?
             W = ((torch.mm(B_star, M)) / B.shape[0]).expand(J, K)
+        # [1, J, K]
         self.evidence_weights = W.unsqueeze(0).to(dtype=torch.float64)
         self._calculate_basic_terms()
         return self.evidence_weights
 
     def _calculate_basic_terms(self):
+        # [1, J, K]
         omega_jk_positive = torch.relu(self.evidence_weights)
         omega_jk_negative = torch.relu(-self.evidence_weights)
+        # [1, K]
         self.w_pos1 = omega_jk_positive.sum(1)[0].unsqueeze(0)
         self.w_neg1 = omega_jk_negative.sum(1)[0].unsqueeze(0)
         self.K = self.w_pos1.shape[-1]
+        # [1]
         self.eta_pos_temp = 1 / (torch.exp(self.w_pos1).sum(dim=1) - self.K + 1)
         self.eta_neg_temp = 1 / (1 - torch.prod(1 - torch.exp(-self.w_neg1), dim=1))
 
@@ -56,14 +61,13 @@ class EvidenceModel:
             second_smallest = sorted_w_neg[non_zero_indices_neg[0]]
         else:
             second_smallest = torch.tensor(1e-6)
-
         w_neg1_copy = self.w_neg1.clone()
         w_neg1_copy[w_neg1_copy == 0] = second_smallest
         self.w_neg2 = w_neg1_copy
+
         # Calculate kappa
         self.kappa = torch.sum(
-            self.eta_pos_temp.reshape(-1, 1)
-            * (torch.exp(self.w_pos2) - 1)
+            self.eta_pos_temp.reshape(-1, 1) * (torch.exp(self.w_pos2) - 1)
             * (1 - self.eta_neg_temp.reshape(-1, 1) * torch.exp(-self.w_neg1)),
             dim=1,
         )
@@ -73,6 +77,7 @@ class EvidenceModel:
         return self.kappa
 
     def get_evidence_ignorance(self):
+        # Why weighting down the ignorance?
         ig = (
             torch.exp(-self.w_neg2.flatten()).sum()
             * self.eta_temp

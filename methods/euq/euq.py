@@ -41,15 +41,15 @@ def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
     ig_value = 0.0
     length_down_proj_features = len(down_proj_features)
     processed_features = []
-    for feature in down_proj_features:
-        processed_features.append(feature.squeeze(0))
-    for feature in processed_features:
-        evidence_weights = evidence_model.get_evidence_weights(feature.squeeze(0).T)
-        conflict_value += evidence_model.get_evidence_conflict().item()
-        ig_value += evidence_model.get_evidence_ignorance().item()
-    del evidence_model, state_dict, down_proj_features, processed_features
-    torch.cuda.empty_cache()
-    gc.collect()
+    # for feature in down_proj_features:
+    #     processed_features.append(feature.squeeze(0))
+    # for feature in processed_features:
+    #     evidence_weights = evidence_model.get_evidence_weights(feature.squeeze(0).T)
+    #     conflict_value += evidence_model.get_evidence_conflict().item()
+    #     ig_value += evidence_model.get_evidence_ignorance().item()
+    # del evidence_model, state_dict, down_proj_features, processed_features
+    # torch.cuda.empty_cache()
+    # gc.collect()
 
     head_conflict_value = 0.0
     head_ig_value = 0.0
@@ -73,8 +73,8 @@ def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
     log_dict[sample["idx"]]["mean_ignorance_value"] = mean_ig_value
     log_dict[sample["idx"]]["mean_head_conflict_value"] = mean_head_conflict_value
     log_dict[sample["idx"]]["mean_head_ignorance_value"] = mean_head_ig_value
-    sample_conflict_value = (mean_conflict_value + mean_head_conflict_value) / 2
-    sample_ignorance_value = (mean_ig_value + mean_head_ig_value) / 2
+    sample_conflict_value = mean_head_conflict_value
+    sample_ignorance_value = mean_head_ig_value
     total_uncertainty = sample_conflict_value + sample_ignorance_value
 
     # Log the results

@@ -24,6 +24,7 @@ class Qwen2FVL:
                 bnb_4bit_compute_dtype=torch.bfloat16,
                 bnb_4bit_use_double_quant=True,
                 bnb_4bit_quant_type="nf4",
+                # load_in_8bit=True,
             )
             self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
                 model_name,
@@ -96,7 +97,7 @@ class Qwen2FVL:
             last_token_hidden = full_hidden[:, -1, :]
             llm_head_features.append(last_token_hidden)
 
-        down_proj_handle = self.model.model.layers[0].mlp.down_proj.register_forward_hook(down_proj_hook)
+        # down_proj_handle = self.model.model.layers[0].mlp.down_proj.register_forward_hook(down_proj_hook)
         lm_head_handle = self.model.lm_head.register_forward_hook(lm_head_hook)
 
         # Generation
@@ -122,7 +123,7 @@ class Qwen2FVL:
         answer = answer[0]
 
         # Post-processing
-        down_proj_features = [x[:,-1:,:].cpu() for x in down_proj_features]
+        down_proj_features = [x[:, -1:, :].cpu() for x in down_proj_features]
         llm_head_feature_temp = []
         for inputs in llm_head_features:
             if(inputs.dim() == 3):
@@ -130,7 +131,7 @@ class Qwen2FVL:
             llm_head_feature_temp.append(inputs.cpu())
         llm_head_features = llm_head_feature_temp
 
-        down_proj_handle.remove()
+        # down_proj_handle.remove()
         lm_head_handle.remove()
         del llm_head_feature_temp
 
