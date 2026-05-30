@@ -16,7 +16,7 @@ class LLaVA:
     def __init__(self, version, use_fastest=False, use_flash_attention=True):
         self.version = version
         self.use_fastest = use_fastest
-        self.use_flash_attention = use_flash_attention and (not use_fastest)
+        self.use_flash_attention = use_flash_attention
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.build_model()
 
@@ -33,8 +33,8 @@ class LLaVA:
                 model_name,
                 quantization_config=quantization_config,
                 low_cpu_mem_usage=True,
-                attn_implementation="eager",
-            )
+                attn_implementation="flash_attention_2" if self.use_flash_attention else "eager",
+            ).to(self.device)
         else:
             model_name = f"llava-hf/{self.version}"
             self.model = LlavaForConditionalGeneration.from_pretrained(

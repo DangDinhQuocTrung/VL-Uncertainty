@@ -9,9 +9,10 @@ warnings.filterwarnings("ignore")
 
 class Qwen2VL:
 
-    def __init__(self, version, use_fastest=False):
+    def __init__(self, version, use_fastest=False, use_flash_attention=True):
         self.version = version
         self.use_fastest = use_fastest
+        self.use_flash_attention = use_flash_attention
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.build_model()
 
@@ -20,7 +21,7 @@ class Qwen2VL:
         self.model = Qwen2VLForConditionalGeneration.from_pretrained(
             model_name,
             torch_dtype=torch.bfloat16,
-            attn_implementation="eager",
+            attn_implementation="flash_attention_2" if self.use_flash_attention else "eager",
             device_map="auto",
         ).to(self.device)
         self.processor = AutoProcessor.from_pretrained(model_name)

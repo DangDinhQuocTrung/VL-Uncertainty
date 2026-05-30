@@ -9,6 +9,7 @@ import warnings
 
 import numpy as np
 import torch
+import gc
 from tqdm import tqdm
 from PIL import Image
 from torchmetrics.functional import auroc, precision, recall, accuracy
@@ -28,11 +29,11 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--use_fastest", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--lvlm", type=str, default="llava-1.5-7b-hf")
+    parser.add_argument("--lvlm", type=str, default="Qwen2.5-VL-7B-Instruct")
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--benchmark", type=str, default="ViLP")
+    parser.add_argument("--benchmark", type=str, default="MisbehaviorBench")
     parser.add_argument("--llm", type=str, default="Qwen2.5-3B-Instruct")
-    parser.add_argument("--uncertainty", type=str, default="vauq")
+    parser.add_argument("--uncertainty", type=str, default="euq")
     parser.add_argument("--uncertainty_threshold", type=float, default=1.0)
 
     # Perturbation-specific arguments
@@ -146,6 +147,10 @@ def handle_batch(args, lvlm, benchmark, llm):
     print(f"Benchmark size: {benchmark_size}")
     if args.use_fastest and False:
         benchmark_size = min(benchmark_size, 4)
+
+    # Run the benchmark
+    split_inference_quantification = 1 if args.uncertainty in ["euq"] else 0
+    args.split_inference_quantification = split_inference_quantification
     for idx in tqdm(range(benchmark_size)):
         log_dict[idx] = {}
         handle_single(args, idx, lvlm, benchmark, llm, log_dict)
@@ -153,11 +158,30 @@ def handle_batch(args, lvlm, benchmark, llm):
             continue
         if log_dict[idx]["flag_answer_correct"]:
             cnt_correct_base += 1
+        if split_inference_quantification:
+            continue
         if log_dict[idx]["flag_detection_correct"]:
             cnt_correct_detection += 1
         total += 1
         uncertainty_scores.append(log_dict[idx]["uncertainty"])
         correctness_gt.append(log_dict[idx]["flag_answer_correct"])
+    # Run again after removing the LVLM
+    args.split_inference_quantification = 2
+    if split_inference_quantification:
+        lvlm.model.to("cpu")
+        del lvlm
+        gc.collect()
+        torch.cuda.empty_cache()
+        lvlm = None
+        for idx in tqdm(range(benchmark_size)):
+            handle_single(args, idx, lvlm, benchmark, llm, log_dict)
+            if not log_dict[idx]["flag_sample_valid"]:
+                continue
+            if log_dict[idx]["flag_detection_correct"]:
+                cnt_correct_detection += 1
+            total += 1
+            uncertainty_scores.append(log_dict[idx]["uncertainty"])
+            correctness_gt.append(log_dict[idx]["flag_answer_correct"])
 
     # Compute metrics
     uncertainty_scores = torch.tensor(uncertainty_scores)

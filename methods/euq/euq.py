@@ -1,38 +1,53 @@
+import os
 import torch
 import gc
+from pathlib import Path
 from utils.constants import BENCHMARK_TYPE
 from methods.euq.evidence import EvidenceModel
 
 
 def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
+    index = sample["idx"]
+    device = llm.model.device
+    weight_dir = Path(lvlm.weight_dir) if lvlm is not None else Path(log_dict["weight_dir"])
+    lvlm_version = lvlm.version if lvlm is not None else log_dict["lvlm_version"]
+    feature_weight_dir = weight_dir / "features"
+    feature_weight_dir.mkdir(parents=True, exist_ok=True)
+
     # Inference
-    answer, down_proj_features, llm_head_features = lvlm.generate(
-        sample["img"],
-        sample["question"],
-        0.2,
-        return_more=True,
-    )
-    log_dict[sample["idx"]]["answer"] = answer
-    flag_answer_correct = True
-    if BENCHMARK_TYPE[args.benchmark] == "MULTI_CHOICE":
-        flag_answer_correct = str(sample["gt_answer"]) in answer
-    else:
-        question = f"Ground truth: {sample['gt_answer']}. Model answer: {answer}. Please verify if the model answer matches the ground truth. Respond with either 'Correct' or 'Wrong' only."
-        llm_answer_check = llm.generate(question, 0.1)
-        log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
-        flag_answer_correct = (
-            "Correct" in llm_answer_check
-            or "correct" in llm_answer_check
-            or "C" in llm_answer_check
-            or "c" in llm_answer_check
+    if args.split_inference_quantification in [0, 1]:
+        log_dict["weight_dir"] = str(lvlm.weight_dir)
+        log_dict["lvlm_version"] = lvlm.version
+        answer, down_proj_features, llm_head_features = lvlm.generate(
+            sample["img"],
+            sample["question"],
+            0.2,
+            return_more=True,
         )
-    log_dict[sample["idx"]]["flag_answer_correct"] = flag_answer_correct
-    log_dict[sample["idx"]]["answer_sampling_list"] = [answer]
+        log_dict[sample["idx"]]["answer"] = answer
+        flag_answer_correct = True
+        if BENCHMARK_TYPE[args.benchmark] == "MULTI_CHOICE":
+            flag_answer_correct = str(sample["gt_answer"]) in answer
+        else:
+            question = f"Ground truth: {sample['gt_answer']}. Model answer: {answer}. Please verify if the model answer matches the ground truth. Respond with either 'Correct' or 'Wrong' only."
+            llm_answer_check = llm.generate(question, 0.1)
+            log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
+            flag_answer_correct = (
+                "Correct" in llm_answer_check
+                or "correct" in llm_answer_check
+                or "C" in llm_answer_check
+                or "c" in llm_answer_check
+            )
+        log_dict[sample["idx"]]["flag_answer_correct"] = flag_answer_correct
+        log_dict[sample["idx"]]["answer_sampling_list"] = [answer]
+    else:
+        answer = log_dict[sample["idx"]]["answer"]
+        down_proj_features = []
+        llm_head_features = torch.load(feature_weight_dir / f"{lvlm_version}_sample_{index:04d}_head_features.pth", map_location=device)
 
     # Evidence model
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    state_dict = torch.load(f"{lvlm.weight_dir}/{lvlm.version}_attention_weights.pth")
-    head_state_dict = torch.load(f"{lvlm.weight_dir}/{lvlm.version}_head_weights.pth")
+    state_dict = torch.load(weight_dir / f"{lvlm_version}_attention_weights.pth", map_location=device)
+    head_state_dict = torch.load(weight_dir / f"{lvlm_version}_head_weights.pth", map_location=device)
     evidence_model = EvidenceModel(state_dict)
     head_evidence_model = EvidenceModel(head_state_dict)
 
@@ -48,13 +63,16 @@ def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
     #     conflict_value += evidence_model.get_evidence_conflict().item()
     #     ig_value += evidence_model.get_evidence_ignorance().item()
     # del evidence_model, state_dict, down_proj_features, processed_features
-    # torch.cuda.empty_cache()
     # gc.collect()
+    # torch.cuda.empty_cache()
 
     head_conflict_value = 0.0
     head_ig_value = 0.0
     length_llm_head_features = len(llm_head_features)
     processed_features_head = []
+    if args.split_inference_quantification == 1:
+        torch.save(llm_head_features, feature_weight_dir / f"{lvlm_version}_sample_{index:04d}_head_features.pth")
+        return log_dict
     for feature in llm_head_features:
         processed_features_head.append(feature)
     for feature in processed_features_head:
@@ -62,13 +80,14 @@ def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
         head_conflict_value += head_evidence_model.get_evidence_conflict().item()
         head_ig_value += head_evidence_model.get_evidence_ignorance().item()
     del head_evidence_model, head_state_dict, llm_head_features, processed_features_head
-    torch.cuda.empty_cache()
     gc.collect()
+    torch.cuda.empty_cache()
+    (feature_weight_dir / f"{lvlm_version}_sample_{index:04d}_head_features.pth").unlink(missing_ok=True)
 
-    mean_conflict_value = conflict_value / length_down_proj_features
-    mean_ig_value = ig_value / length_down_proj_features
-    mean_head_conflict_value = head_conflict_value / length_llm_head_features
-    mean_head_ig_value = head_ig_value / length_llm_head_features
+    mean_conflict_value = conflict_value / max(length_down_proj_features, 1)
+    mean_ig_value = ig_value / max(length_down_proj_features, 1)
+    mean_head_conflict_value = head_conflict_value / max(length_llm_head_features, 1)
+    mean_head_ig_value = head_ig_value / max(length_llm_head_features, 1)
     log_dict[sample["idx"]]["mean_conflict_value"] = mean_conflict_value
     log_dict[sample["idx"]]["mean_ignorance_value"] = mean_ig_value
     log_dict[sample["idx"]]["mean_head_conflict_value"] = mean_head_conflict_value
