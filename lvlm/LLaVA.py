@@ -34,7 +34,7 @@ class LLaVA:
                 quantization_config=quantization_config,
                 low_cpu_mem_usage=True,
                 attn_implementation="flash_attention_2" if self.use_flash_attention else "eager",
-            ).to(self.device)
+            )
         else:
             model_name = f"llava-hf/{self.version}"
             self.model = LlavaForConditionalGeneration.from_pretrained(

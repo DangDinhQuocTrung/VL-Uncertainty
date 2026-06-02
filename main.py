@@ -29,11 +29,11 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--use_fastest", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--lvlm", type=str, default="Qwen2.5-VL-7B-Instruct")
+    parser.add_argument("--lvlm", type=str, default="llava-1.5-7b-hf")
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--benchmark", type=str, default="MisbehaviorBench")
+    parser.add_argument("--benchmark", type=str, default="ViLP")
     parser.add_argument("--llm", type=str, default="Qwen2.5-3B-Instruct")
-    parser.add_argument("--uncertainty", type=str, default="euq")
+    parser.add_argument("--uncertainty", type=str, default="vauq")
     parser.add_argument("--uncertainty_threshold", type=float, default=1.0)
 
     # Perturbation-specific arguments
@@ -56,7 +56,7 @@ def parse_args():
     parser.add_argument("--pair_order", type=str, default="progressively")
 
     # Sampling-specific arguments
-    parser.add_argument("--inference_temp", type=float, default=0.1)
+    parser.add_argument("--inference_temp", type=float, default=0.0)
     parser.add_argument("--sampling_temp", type=float, default=1.0)
     parser.add_argument("--sampling_time", type=int, default=5)
     args = parser.parse_args()

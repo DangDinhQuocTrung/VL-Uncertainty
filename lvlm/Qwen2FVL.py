@@ -33,15 +33,16 @@ class Qwen2FVL:
                 low_cpu_mem_usage=True,
                 attn_implementation="flash_attention_2" if self.use_flash_attention else "eager",
                 device_map="auto",
-            ).to(self.device)
+            )
         else:
             model_name = f"Qwen/{self.version}"
+            self.use_flash_attention = False
             self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
                 model_name,
                 torch_dtype=torch.bfloat16,
                 attn_implementation="flash_attention_2" if self.use_flash_attention else "eager",
                 device_map="auto",
-            ).to(self.device)
+            )
         self.processor = AutoProcessor.from_pretrained(model_name)
         self.save_head_weights()
 
@@ -98,7 +99,7 @@ class Qwen2FVL:
             last_token_hidden = full_hidden[:, -1, :]
             llm_head_features.append(last_token_hidden)
 
-        # down_proj_handle = self.model.model.layers[0].mlp.down_proj.register_forward_hook(down_proj_hook)
+        down_proj_handle = self.model.model.layers[0].mlp.down_proj.register_forward_hook(down_proj_hook)
         lm_head_handle = self.model.lm_head.register_forward_hook(lm_head_hook)
 
         # Generation
@@ -132,7 +133,7 @@ class Qwen2FVL:
             llm_head_feature_temp.append(inputs.cpu())
         llm_head_features = llm_head_feature_temp
 
-        # down_proj_handle.remove()
+        down_proj_handle.remove()
         lm_head_handle.remove()
         del llm_head_feature_temp
 

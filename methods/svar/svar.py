@@ -10,7 +10,7 @@ def estimate_uncertainty_by_svar(args, model_manager, sample, llm, log_dict):
     answer, input_ids, outputs = model_manager.generate(
         sample["img"],
         sample["question"],
-        0.0,
+        args.inference_temp,
         return_more=True,
     )
     log_dict[sample["idx"]]["answer"] = answer

@@ -21,7 +21,7 @@ def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
         answer, down_proj_features, llm_head_features = lvlm.generate(
             sample["img"],
             sample["question"],
-            0.2,
+            args.inference_temp,
             return_more=True,
         )
         log_dict[sample["idx"]]["answer"] = answer
@@ -42,7 +42,7 @@ def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
         log_dict[sample["idx"]]["answer_sampling_list"] = [answer]
     else:
         answer = log_dict[sample["idx"]]["answer"]
-        down_proj_features = []
+        down_proj_features = torch.load(feature_weight_dir / f"{lvlm_version}_sample_{index:04d}_down_proj_features.pth", map_location=device)
         llm_head_features = torch.load(feature_weight_dir / f"{lvlm_version}_sample_{index:04d}_head_features.pth", map_location=device)
 
     # Evidence model
@@ -56,15 +56,19 @@ def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
     ig_value = 0.0
     length_down_proj_features = len(down_proj_features)
     processed_features = []
-    # for feature in down_proj_features:
-    #     processed_features.append(feature.squeeze(0))
-    # for feature in processed_features:
-    #     evidence_weights = evidence_model.get_evidence_weights(feature.squeeze(0).T)
-    #     conflict_value += evidence_model.get_evidence_conflict().item()
-    #     ig_value += evidence_model.get_evidence_ignorance().item()
-    # del evidence_model, state_dict, down_proj_features, processed_features
-    # gc.collect()
-    # torch.cuda.empty_cache()
+    if args.split_inference_quantification == 1:
+        torch.save(down_proj_features, feature_weight_dir / f"{lvlm_version}_sample_{index:04d}_down_proj_features.pth")
+    else:
+        for feature in down_proj_features:
+            processed_features.append(feature.squeeze(0))
+        for feature in processed_features:
+            evidence_weights = evidence_model.get_evidence_weights(feature.squeeze(0).T)
+            conflict_value += evidence_model.get_evidence_conflict().item()
+            ig_value += evidence_model.get_evidence_ignorance().item()
+        del evidence_model, state_dict, down_proj_features, processed_features
+        gc.collect()
+        torch.cuda.empty_cache()
+        (feature_weight_dir / f"{lvlm_version}_sample_{index:04d}_down_proj_features.pth").unlink(missing_ok=True)
 
     head_conflict_value = 0.0
     head_ig_value = 0.0
@@ -72,17 +76,20 @@ def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
     processed_features_head = []
     if args.split_inference_quantification == 1:
         torch.save(llm_head_features, feature_weight_dir / f"{lvlm_version}_sample_{index:04d}_head_features.pth")
+    else:
+        for feature in llm_head_features:
+            processed_features_head.append(feature)
+        for feature in processed_features_head:
+            head_evidence_weights = head_evidence_model.get_evidence_weights(feature.T)
+            head_conflict_value += head_evidence_model.get_evidence_conflict().item()
+            head_ig_value += head_evidence_model.get_evidence_ignorance().item()
+        del head_evidence_model, head_state_dict, llm_head_features, processed_features_head
+        gc.collect()
+        torch.cuda.empty_cache()
+        (feature_weight_dir / f"{lvlm_version}_sample_{index:04d}_head_features.pth").unlink(missing_ok=True)
+
+    if args.split_inference_quantification == 1:
         return log_dict
-    for feature in llm_head_features:
-        processed_features_head.append(feature)
-    for feature in processed_features_head:
-        head_evidence_weights = head_evidence_model.get_evidence_weights(feature.T)
-        head_conflict_value += head_evidence_model.get_evidence_conflict().item()
-        head_ig_value += head_evidence_model.get_evidence_ignorance().item()
-    del head_evidence_model, head_state_dict, llm_head_features, processed_features_head
-    gc.collect()
-    torch.cuda.empty_cache()
-    (feature_weight_dir / f"{lvlm_version}_sample_{index:04d}_head_features.pth").unlink(missing_ok=True)
 
     mean_conflict_value = conflict_value / max(length_down_proj_features, 1)
     mean_ig_value = ig_value / max(length_down_proj_features, 1)
@@ -92,8 +99,8 @@ def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
     log_dict[sample["idx"]]["mean_ignorance_value"] = mean_ig_value
     log_dict[sample["idx"]]["mean_head_conflict_value"] = mean_head_conflict_value
     log_dict[sample["idx"]]["mean_head_ignorance_value"] = mean_head_ig_value
-    sample_conflict_value = mean_head_conflict_value
-    sample_ignorance_value = mean_head_ig_value
+    sample_conflict_value = mean_conflict_value + mean_head_conflict_value
+    sample_ignorance_value = mean_ig_value + mean_head_ig_value
     total_uncertainty = sample_conflict_value + sample_ignorance_value
 
     # Log the results
