@@ -35,8 +35,8 @@ def generate_with_masked_visual_tokens(model, inputs, top_k_visual_positions, mo
     elif model_type == "qwen":
         layer_0 = model.model.model.layers[0]
 
-    inputs["attention_mask"][0, top_k_visual_positions] = 0
-    # handle = layer_0.register_forward_pre_hook(pre_hook)
+    # inputs["attention_mask"][0, top_k_visual_positions] = 0
+    handle = layer_0.register_forward_pre_hook(pre_hook)
     with torch.no_grad():
         outputs = model.model.generate(
             **inputs,
@@ -46,7 +46,7 @@ def generate_with_masked_visual_tokens(model, inputs, top_k_visual_positions, mo
             output_scores=True,
             return_dict_in_generate=True,
         )
-    # handle.remove()
+    handle.remove()
 
     if model_type == "llava":
         answer = outputs["sequences"]

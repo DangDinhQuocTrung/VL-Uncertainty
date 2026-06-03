@@ -1,0 +1,2 @@
+
+DEFAULT_IMAGE_TOKEN = "<image>"

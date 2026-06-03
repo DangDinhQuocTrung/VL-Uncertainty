@@ -5,7 +5,20 @@ import torch
 from qwen_vl_utils import process_vision_info
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration, BitsAndBytesConfig
 
+from custom_llava.conversation import conv_templates, SeparatorStyle
+from utils.text_constants import DEFAULT_IMAGE_TOKEN
+
 warnings.filterwarnings("ignore")
+
+
+def make_prompt(context, question):
+    question = DEFAULT_IMAGE_TOKEN + "\n" + question
+    conv = conv_templates["llava_v1"].copy()
+    conv.append_message(conv.roles[0], question)
+    conv.append_message(conv.roles[1], None)
+    prompt = conv.get_prompt()
+    stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
+    return prompt
 
 
 class Qwen2FVL:
@@ -14,6 +27,7 @@ class Qwen2FVL:
         self.version = version
         self.use_fastest = use_fastest
         self.use_flash_attention = use_flash_attention
+        # self.use_flash_attention = False
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.build_model()
 
@@ -36,7 +50,6 @@ class Qwen2FVL:
             )
         else:
             model_name = f"Qwen/{self.version}"
-            self.use_flash_attention = False
             self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
                 model_name,
                 torch_dtype=torch.bfloat16,
@@ -65,12 +78,14 @@ class Qwen2FVL:
         return
 
     def generate(self, image, question, temp, return_more=False):
+        prompt = make_prompt(None, question)
+
         messages = [
             {
                 "role": "user",
                 "content": [
                     {"type": "image", "image": image},
-                    {"type": "text", "text": question},
+                    {"type": "text", "text": prompt},
                 ],
             }
         ]
@@ -108,9 +123,9 @@ class Qwen2FVL:
             max_new_tokens=64,
             do_sample=temp > 0.0,
             temperature=temp,
-            repetition_penalty=1.05,
-            top_k=50,
-            top_p=0.95,
+            # repetition_penalty=1.05,
+            # top_k=50,
+            # top_p=0.95,
             output_hidden_states=True,
         )
         generated_ids_trimmed = [

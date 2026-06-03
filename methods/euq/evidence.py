@@ -7,6 +7,7 @@ import mpmath
 class EvidenceModel:
     def __init__(self, Beta):
         self.B = Beta
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         # self.bias = bias
         self.evidence_weights = None
         self.w_pos = None
@@ -18,11 +19,11 @@ class EvidenceModel:
     def get_evidence_weights(self, Phi):
         J, K = self.B.shape
         with torch.no_grad():
-            B = self.B.to("cuda:0")
+            B = self.B.to(self.device)
             B = B.to(torch.bfloat16)
             if B.dtype == torch.uint8:
                 B = B.to(torch.bfloat16)
-            Phi = Phi.to("cuda:0").to(B.dtype)
+            Phi = Phi.to(self.device).to(B.dtype)
             M = Phi.view(-1, 1)
             B_star = B - B.mean(axis=1, keepdims=True)
             # print(B_star.shape, M.shape, J, K)
@@ -30,6 +31,8 @@ class EvidenceModel:
             W = ((torch.mm(B_star, M)) / B.shape[0]).expand(J, K)
         # [1, J, K]
         self.evidence_weights = W.unsqueeze(0).to(dtype=torch.float64)
+        # self.evidence_weights = W.unsqueeze(0).to(dtype=torch.float32)
+        # self.evidence_weights = self.evidence_weights.to("cpu")
         self._calculate_basic_terms()
         return self.evidence_weights
 
@@ -40,6 +43,8 @@ class EvidenceModel:
         # [1, K]
         self.w_pos1 = omega_jk_positive.sum(1)[0].unsqueeze(0)
         self.w_neg1 = omega_jk_negative.sum(1)[0].unsqueeze(0)
+        # self.w_pos1 = self.w_pos1.to(self.device)
+        # self.w_neg1 = self.w_neg1.to(self.device)
         self.K = self.w_pos1.shape[-1]
         # [1]
         self.eta_pos_temp = 1 / (torch.exp(self.w_pos1).sum(dim=1) - self.K + 1)

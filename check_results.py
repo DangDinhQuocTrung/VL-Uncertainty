@@ -7,7 +7,8 @@ from torchmetrics.functional import auroc, average_precision
 
 def check_results():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    json_path = Path("/zhome/05/8/227717/VL-Uncertainty/exp/log_2026_05_31_00_44_20.json")
+    # json_path = Path("/zhome/05/8/227717/VL-Uncertainty/exp/log_2026_06_03_00_48_00.json")
+    json_path = Path("/zhome/05/8/227717/VL-Uncertainty/exp/log_2026_06_03_00_32_24.json")
     with open(json_path, "r") as f:
         log_dict = json.load(f)
 
@@ -17,7 +18,8 @@ def check_results():
         if not key.isdigit():
             continue
         flag_answer_correct.append(value["flag_answer_correct"])
-        uncertainty_scores.append(value["clean_entropy"] + 0.01 * value["image_score"])
+        # uncertainty_scores.append(value["mean_head_ignorance_value"] + value["mean_head_conflict_value"])
+        uncertainty_scores.append(value["masked_entropy"])
 
     flag_answer_correct = torch.tensor(flag_answer_correct, dtype=torch.long).to(device)
     uncertainty_scores = torch.tensor(uncertainty_scores, dtype=torch.float32).to(device)

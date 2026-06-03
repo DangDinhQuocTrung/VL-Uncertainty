@@ -28,12 +28,13 @@ warnings.filterwarnings("ignore")
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--quick_benchmark", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--use_fastest", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--lvlm", type=str, default="llava-1.5-7b-hf")
+    parser.add_argument("--lvlm", type=str, default="Qwen2.5-VL-7B-Instruct")
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--benchmark", type=str, default="ViLP")
+    parser.add_argument("--benchmark", type=str, default="MisbehaviorBench")
     parser.add_argument("--llm", type=str, default="Qwen2.5-3B-Instruct")
-    parser.add_argument("--uncertainty", type=str, default="vauq")
+    parser.add_argument("--uncertainty", type=str, default="euq")
     parser.add_argument("--uncertainty_threshold", type=float, default=1.0)
 
     # Perturbation-specific arguments
@@ -145,7 +146,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     correctness_gt = []
     benchmark_size = benchmark.obtain_size()
     print(f"Benchmark size: {benchmark_size}")
-    if args.use_fastest and False:
+    if args.quick_benchmark:
         benchmark_size = min(benchmark_size, 4)
 
     # Run the benchmark
@@ -168,7 +169,8 @@ def handle_batch(args, lvlm, benchmark, llm):
     # Run again after removing the LVLM
     args.split_inference_quantification = 2
     if split_inference_quantification:
-        lvlm.model.to("cpu")
+        if not args.use_fastest:
+            lvlm.model.to("cpu")
         del lvlm
         gc.collect()
         torch.cuda.empty_cache()
@@ -210,7 +212,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     if not os.path.exists("exp"):
         os.makedirs("exp")
     with open(f"exp/log_{begin_time_str}.json", "w") as f:
-        json.dump(log_dict, f)
+        json.dump(log_dict, f, indent=4 if args.quick_benchmark else None)
     print(f"- Full log is saved at exp/log_dict_{begin_time_str}.json.")
 
 

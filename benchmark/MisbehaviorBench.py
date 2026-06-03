@@ -24,7 +24,13 @@ class MisbehaviorBench:
 
     def retrieve(self, idx):
         row = self.ds.iloc[idx]
-        question = f"{row['question']}\nNOTE: Please answer with one word."
+
+        question = str(row["question"])
+        question_parts = [question, ""]
+        for option in ["A", "B", "C", "D"]:
+            question_parts.append(f"{option}. {str(row[option])}")
+        question = " ".join(filter(None, question_parts))
+        question += " (only answer a full option, do not need explanation)"
 
         image_name = None
         if self.task_name == "hallucination":
@@ -35,10 +41,10 @@ class MisbehaviorBench:
             image_name = Path(row["image"]).name
         elif self.task_name == "ood":
             image_name = row["id"] + ".png"
-        image = Image.open(self.root_dir / self.task_name / "images" / image_name)
+        image = str(self.root_dir / self.task_name / "images" / image_name)
         answer = row["answer"]
         if self.task_name == "hallucination":
-            answer = row[answer]
+            answer = f'{row["answer"]}. {row[row["answer"]]}'
 
         result = {
             "idx": idx,

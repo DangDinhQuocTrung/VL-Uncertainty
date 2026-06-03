@@ -78,11 +78,17 @@ def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
         torch.save(llm_head_features, feature_weight_dir / f"{lvlm_version}_sample_{index:04d}_head_features.pth")
     else:
         for feature in llm_head_features:
+            feature.to("cpu")
             processed_features_head.append(feature)
-        for feature in processed_features_head:
+        for feature_index in range(length_llm_head_features):
+            feature = processed_features_head[feature_index]
             head_evidence_weights = head_evidence_model.get_evidence_weights(feature.T)
             head_conflict_value += head_evidence_model.get_evidence_conflict().item()
             head_ig_value += head_evidence_model.get_evidence_ignorance().item()
+            feature.to("cpu")
+            del feature
+            gc.collect()
+            torch.cuda.empty_cache()
         del head_evidence_model, head_state_dict, llm_head_features, processed_features_head
         gc.collect()
         torch.cuda.empty_cache()
