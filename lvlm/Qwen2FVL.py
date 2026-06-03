@@ -78,7 +78,8 @@ class Qwen2FVL:
         return
 
     def generate(self, image, question, temp, return_more=False):
-        prompt = make_prompt(None, question)
+        prompt = question
+        # prompt = make_prompt(None, question)
 
         messages = [
             {
@@ -123,9 +124,9 @@ class Qwen2FVL:
             max_new_tokens=64,
             do_sample=temp > 0.0,
             temperature=temp,
-            # repetition_penalty=1.05,
-            # top_k=50,
-            # top_p=0.95,
+            repetition_penalty=1.05,
+            top_k=50,
+            top_p=0.95,
             output_hidden_states=True,
         )
         generated_ids_trimmed = [

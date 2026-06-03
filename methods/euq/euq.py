@@ -85,6 +85,7 @@ def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
             head_evidence_weights = head_evidence_model.get_evidence_weights(feature.T)
             head_conflict_value += head_evidence_model.get_evidence_conflict().item()
             head_ig_value += head_evidence_model.get_evidence_ignorance().item()
+            processed_features_head[feature_index] = None
             feature.to("cpu")
             del feature
             gc.collect()
