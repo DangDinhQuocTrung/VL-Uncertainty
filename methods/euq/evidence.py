@@ -8,6 +8,7 @@ class EvidenceModel:
     def __init__(self, Beta):
         self.B = Beta
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.mode = "like_code"
         # self.bias = bias
         self.evidence_weights = None
         self.w_pos = None
@@ -19,16 +20,29 @@ class EvidenceModel:
     def get_evidence_weights(self, Phi):
         J, K = self.B.shape
         with torch.no_grad():
-            B = self.B.to(self.device)
-            B = B.to(torch.bfloat16)
-            if B.dtype == torch.uint8:
+            if self.mode == "like_code":
+                B = self.B.to(self.device)
                 B = B.to(torch.bfloat16)
-            Phi = Phi.to(self.device).to(B.dtype)
-            M = Phi.view(-1, 1)
-            B_star = B - B.mean(axis=1, keepdims=True)
-            # print(B_star.shape, M.shape, J, K)
-            # Where are A_star and B_star?
-            W = ((torch.mm(B_star, M)) / B.shape[0]).expand(J, K)
+                if B.dtype == torch.uint8:
+                    B = B.to(torch.bfloat16)
+                Phi = Phi.to(self.device).to(B.dtype)
+                M = Phi.view(-1, 1)
+                B_star = B - B.mean(axis=1, keepdims=True)
+                # print(B_star.shape, M.shape, J, K)
+                # Where are A_star and B_star?
+                W = ((torch.mm(B_star, M)) / B.shape[0]).expand(J, K)
+            elif self.mode == "like_paper":
+                B = self.B.to(self.device)
+                B = B.to(torch.bfloat16)
+                if B.dtype == torch.uint8:
+                    B = B.to(torch.bfloat16)
+                Phi = Phi.to(self.device).to(B.dtype)
+                M = Phi.view(-1, 1)
+                A_star = B - B.mean(axis=1, keepdims=True)
+                B_star = -(A_star - A_star.mean(axis=0, keepdims=True)) * M.T
+                W = (A_star * M.T + B_star) / (J)
+            else:
+                raise ValueError(f"Invalid mode: {self.mode}")
         # [1, J, K]
         self.evidence_weights = W.unsqueeze(0).to(dtype=torch.float64)
         # self.evidence_weights = W.unsqueeze(0).to(dtype=torch.float32)

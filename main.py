@@ -28,7 +28,7 @@ warnings.filterwarnings("ignore")
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--quick_benchmark", type=lambda x: x.lower() == "true", default="False")
+    parser.add_argument("--quick_benchmark", type=lambda x: x.lower() == "true", default="True")
     parser.add_argument("--use_fastest", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--lvlm", type=str, default="Qwen2.5-VL-7B-Instruct")
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
@@ -147,7 +147,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     benchmark_size = benchmark.obtain_size()
     print(f"Benchmark size: {benchmark_size}")
     if args.quick_benchmark:
-        benchmark_size = min(benchmark_size, 4)
+        benchmark_size = min(benchmark_size, 5)
 
     # Run the benchmark
     split_inference_quantification = 1 if args.uncertainty in ["euq"] else 0

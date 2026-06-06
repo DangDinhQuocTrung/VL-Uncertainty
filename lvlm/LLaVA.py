@@ -6,6 +6,7 @@ from transformers import (
     AutoProcessor,
     LlavaForConditionalGeneration,
     BitsAndBytesConfig,
+    GenerationConfig,
 )
 
 warnings.filterwarnings("ignore")
@@ -66,11 +67,13 @@ class LLaVA:
         outputs = self.model.generate(
             **inputs,
             max_new_tokens=64,
-            do_sample=temp > 0.0,
-            temperature=temp,
             output_scores=return_more,
             output_attentions=return_more,
             return_dict_in_generate=return_more,
+            generation_config=GenerationConfig(
+                do_sample=temp > 0.0,
+                temperature=temp,
+            ),
         )
         answer = outputs["sequences"] if return_more else outputs
         final_answer = (

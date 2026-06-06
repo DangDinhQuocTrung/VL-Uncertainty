@@ -3,7 +3,7 @@ import warnings
 
 import torch
 from qwen_vl_utils import process_vision_info
-from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration, BitsAndBytesConfig
+from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration, BitsAndBytesConfig, GenerationConfig
 
 from custom_llava.conversation import conv_templates, SeparatorStyle
 from utils.text_constants import DEFAULT_IMAGE_TOKEN
@@ -27,7 +27,7 @@ class Qwen2FVL:
         self.version = version
         self.use_fastest = use_fastest
         self.use_flash_attention = use_flash_attention
-        # self.use_flash_attention = False
+        self.use_flash_attention = False
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.build_model()
 
@@ -69,9 +69,9 @@ class Qwen2FVL:
             print(self.model.lm_head)
             head_weight_cpu = head_weight.cpu()
             torch.save(head_weight_cpu, head_weights_path)
-            # attention_weight = self.model.model.language_model.layers[0].mlp.down_proj.weight
-            attention_weight = self.model.model.layers[0].mlp.down_proj.weight
-            print(self.model.model.layers[0].mlp.down_proj)
+            attention_weight = self.model.model.language_model.layers[0].mlp.down_proj.weight
+            # attention_weight = self.model.model.layers[0].mlp.down_proj.weight
+            print(self.model.model.language_model.layers[0].mlp.down_proj)
             # attention_weight = attention_weight.view(1792, 18944)
             attention_weight_cpu = attention_weight.cpu()
             torch.save(attention_weight_cpu, attention_weights_path)
@@ -115,19 +115,22 @@ class Qwen2FVL:
             last_token_hidden = full_hidden[:, -1, :]
             llm_head_features.append(last_token_hidden)
 
-        down_proj_handle = self.model.model.layers[0].mlp.down_proj.register_forward_hook(down_proj_hook)
+        # EUQ hook
+        down_proj_handle = self.model.model.language_model.layers[0].mlp.down_proj.register_forward_hook(down_proj_hook)
         lm_head_handle = self.model.lm_head.register_forward_hook(lm_head_hook)
 
         # Generation
         generated_ids = self.model.generate(
             **inputs,
             max_new_tokens=64,
-            do_sample=temp > 0.0,
-            temperature=temp,
-            repetition_penalty=1.05,
-            top_k=50,
-            top_p=0.95,
             output_hidden_states=True,
+            generation_config=GenerationConfig(
+                do_sample=temp > 0.0,
+                temperature=temp,
+                repetition_penalty=1.05,
+                top_k=50,
+                top_p=0.95,
+            )
         )
         generated_ids_trimmed = [
             out_ids[len(in_ids) :]
@@ -149,6 +152,7 @@ class Qwen2FVL:
             llm_head_feature_temp.append(inputs.cpu())
         llm_head_features = llm_head_feature_temp
 
+        # Remove temporary variables
         down_proj_handle.remove()
         lm_head_handle.remove()
         del llm_head_feature_temp
