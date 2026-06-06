@@ -53,9 +53,11 @@ class Qwen2FVL:
             self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
                 model_name,
                 torch_dtype=torch.bfloat16,
+                # Use sdpa for matching the results of previous flash_attention_2
                 attn_implementation="flash_attention_2" if self.use_flash_attention else "eager",
                 device_map="auto",
             )
+        self.model.eval()
         self.processor = AutoProcessor.from_pretrained(model_name)
         self.save_head_weights()
 
@@ -77,7 +79,7 @@ class Qwen2FVL:
             torch.save(attention_weight_cpu, attention_weights_path)
         return
 
-    def generate(self, image, question, temp, return_more=False):
+    def generate(self, image, question, temp, return_more=False, return_mode=0):
         prompt = question
         # prompt = make_prompt(None, question)
 
@@ -120,10 +122,13 @@ class Qwen2FVL:
         lm_head_handle = self.model.lm_head.register_forward_hook(lm_head_hook)
 
         # Generation
-        generated_ids = self.model.generate(
+        outputs = self.model.generate(
             **inputs,
             max_new_tokens=64,
-            output_hidden_states=True,
+            output_scores=return_more,
+            output_attentions=return_more,
+            output_hidden_states=return_more,
+            return_dict_in_generate=return_more,
             generation_config=GenerationConfig(
                 do_sample=temp > 0.0,
                 temperature=temp,
@@ -132,6 +137,7 @@ class Qwen2FVL:
                 top_p=0.95,
             )
         )
+        generated_ids = outputs["sequences"] if return_more else outputs
         generated_ids_trimmed = [
             out_ids[len(in_ids) :]
             for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
@@ -146,10 +152,10 @@ class Qwen2FVL:
         # Post-processing
         down_proj_features = [x[:, -1:, :].cpu() for x in down_proj_features]
         llm_head_feature_temp = []
-        for inputs in llm_head_features:
-            if(inputs.dim() == 3):
-                inputs = inputs.unsqueeze(0)
-            llm_head_feature_temp.append(inputs.cpu())
+        for head_inputs in llm_head_features:
+            if(head_inputs.dim() == 3):
+                head_inputs = head_inputs.unsqueeze(0)
+            llm_head_feature_temp.append(head_inputs.cpu())
         llm_head_features = llm_head_feature_temp
 
         # Remove temporary variables
@@ -157,6 +163,8 @@ class Qwen2FVL:
         lm_head_handle.remove()
         del llm_head_feature_temp
 
-        if return_more:
+        if return_more and return_mode == 0:
             return answer, down_proj_features, llm_head_features
+        elif return_more and return_mode == 1:
+            return answer, inputs, outputs
         return answer

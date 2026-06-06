@@ -14,6 +14,35 @@ def compute_entropy(outputs):
     return mean_entropy
 
 
+def compute_attention_over_visual_tokens(model, processor, inputs, outputs, lvlm_type, device=None):
+    layer_range = [10, 25] if lvlm_type == "llava" else [10, 21]
+    if device is None:
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    if "llava" in lvlm_type:
+        image_token_id = model.config.image_token_index
+    elif "Qwen" in lvlm_type:
+        image_token_id = processor.tokenizer.convert_tokens_to_ids("<|image_pad|>")
+    else:
+        raise ValueError(f"Unsupported model: {lvlm_type}")
+
+    visual_token_positions = (inputs["input_ids"][0] == image_token_id).nonzero(as_tuple=True)[0]
+    visual_token_start_index = visual_token_positions.min().item()
+    visual_token_end_index = visual_token_positions.max().item() + 1
+    generation_steps = len(outputs["attentions"])
+    num_layers = len(outputs["attentions"][0])
+    sum_attention_over_visual_tokens = torch.zeros(visual_token_end_index - visual_token_start_index).to(device)
+    sum_attention_over_layers = torch.zeros(layer_range[1] - layer_range[0]).to(device)
+    for step_index in range(1, generation_steps):
+        for layer_index in range(layer_range[0], layer_range[1]):
+            attention_values = outputs["attentions"][step_index][layer_index][
+                :, :, :, visual_token_start_index:visual_token_end_index]
+            sum_attention_over_visual_tokens += attention_values.sum(dim=(0, 1, 2))
+            sum_attention_over_layers[layer_index - layer_range[0]] += attention_values.sum()
+
+    return image_token_id, visual_token_positions, visual_token_start_index, visual_token_end_index, sum_attention_over_visual_tokens, sum_attention_over_layers
+
+
 def generate_with_masked_visual_tokens(model, inputs, top_k_visual_positions, model_type="llava"):
     if "llava" in model_type:
         model_type = "llava"
@@ -33,10 +62,10 @@ def generate_with_masked_visual_tokens(model, inputs, top_k_visual_positions, mo
     if model_type == "llava":
         layer_0 = model.model.language_model.model.layers[0]
     elif model_type == "qwen":
-        layer_0 = model.model.model.layers[0]
+        layer_0 = model.model.model.language_model.layers[0]
 
-    inputs["attention_mask"][0, top_k_visual_positions] = 0
-    # handle = layer_0.register_forward_pre_hook(pre_hook)
+    # inputs["attention_mask"][0, top_k_visual_positions] = 0
+    handle = layer_0.register_forward_pre_hook(pre_hook)
     with torch.no_grad():
         outputs = model.model.generate(
             **inputs,
@@ -46,7 +75,7 @@ def generate_with_masked_visual_tokens(model, inputs, top_k_visual_positions, mo
             output_scores=True,
             return_dict_in_generate=True,
         )
-    # handle.remove()
+    handle.remove()
 
     if model_type == "llava":
         answer = outputs["sequences"]
@@ -82,6 +111,7 @@ def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
         sample["question"],
         args.inference_temp,
         return_more=True,
+        return_mode=1,
     )
     log_dict[sample["idx"]]["answer"] = answer
     flag_answer_correct = True
@@ -104,31 +134,14 @@ def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
     clean_entropy = compute_entropy(outputs).item()
 
     # Get visual tokens
-    if "llava" in args.lvlm:
-        image_token_id = lvlm.model.config.image_token_index
-    elif "Qwen" in args.lvlm:
-        image_token_id = lvlm.processor.tokenizer.convert_tokens_to_ids("<|image_pad|>")
-    else:
-        raise ValueError(f"Unsupported model: {args.lvlm}")
-
-    visual_token_positions = (inputs["input_ids"][0] == image_token_id).nonzero(as_tuple=True)[0]
-    vision_token_start_index = visual_token_positions.min().item()
-    vision_token_end_index = visual_token_positions.max().item() + 1
-    generation_steps = len(outputs["attentions"])
-    num_layers = len(outputs["attentions"][0])
-    layer_range = [10, 25]
-    sum_attention_over_vision_tokens = torch.zeros(vision_token_end_index - vision_token_start_index).to(device)
-    for step_index in range(1, generation_steps):
-        for layer_index in range(layer_range[0], layer_range[1]):
-            attention_values = outputs["attentions"][step_index][layer_index][
-                :, :, :, vision_token_start_index:vision_token_end_index]
-            sum_attention_over_vision_tokens += attention_values.sum(dim=(0, 1, 2))
+    image_token_id, visual_token_positions, visual_token_start_index, visual_token_end_index, sum_attention_over_visual_tokens, _ = compute_attention_over_visual_tokens(
+        lvlm.model, lvlm.processor, inputs, outputs, args.lvlm, device)
 
     # Masking
-    top_k_indices = torch.topk(sum_attention_over_vision_tokens, K).indices
-    top_k_vision_token_positions = visual_token_positions[top_k_indices]
+    top_k_indices = torch.topk(sum_attention_over_visual_tokens, K).indices
+    top_k_visual_token_positions = visual_token_positions[top_k_indices]
     masked_answer, outputs_with_masked_visual_tokens = generate_with_masked_visual_tokens(
-        lvlm, inputs, top_k_vision_token_positions, args.lvlm)
+        lvlm, inputs, top_k_visual_token_positions, args.lvlm)
     masked_entropy = compute_entropy(outputs_with_masked_visual_tokens).item()
 
     # Log the results

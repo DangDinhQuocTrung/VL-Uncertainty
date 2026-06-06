@@ -24,6 +24,7 @@ class Qwen2VL:
             attn_implementation="flash_attention_2" if self.use_flash_attention else "eager",
             device_map="auto",
         ).to(self.device)
+        self.model.eval()
         self.processor = AutoProcessor.from_pretrained(model_name)
 
     def generate(self, image, question, temp, return_more=False):
