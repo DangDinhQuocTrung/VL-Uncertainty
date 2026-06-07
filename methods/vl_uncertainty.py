@@ -6,6 +6,7 @@ import collections
 from utils.misc import *
 from utils.textual_perturbation import *
 from utils.visual_perturbation import *
+from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
 from utils.constants import BENCHMARK_TYPE
 
 
@@ -176,15 +177,8 @@ def infer_single_sample(args, lvlm, sample, is_sampling, llm, log_dict):
         if BENCHMARK_TYPE[args.benchmark] == "MULTI_CHOICE":
             flag_answer_correct = str(sample["gt_answer"]) in answer
         else:
-            question = f"Ground truth: {sample['gt_answer']}. Model answer: {answer}. Please verify if the model answer matches the ground truth. Respond with either 'Correct' or 'Wrong' only."
-            llm_answer_check = llm.generate(question, 0.1)
+            flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(llm, sample, answer)
             log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
-            flag_answer_correct = (
-                "Correct" in llm_answer_check
-                or "correct" in llm_answer_check
-                or "C" in llm_answer_check
-                or "c" in llm_answer_check
-            )
         log_dict[sample["idx"]]["flag_answer_correct"] = flag_answer_correct
     else:
         log_dict[sample["idx"]]["answer_sampling_list"].append(answer)

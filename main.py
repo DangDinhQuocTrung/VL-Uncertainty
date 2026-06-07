@@ -58,8 +58,8 @@ def parse_args():
 
     # Sampling-specific arguments
     parser.add_argument("--inference_temp", type=float, default=0.0)
-    parser.add_argument("--sampling_temp", type=float, default=1.0)
-    parser.add_argument("--sampling_time", type=int, default=5)
+    parser.add_argument("--sampling_temp", type=float, default=0.0)
+    parser.add_argument("--sampling_time", type=int, default=0)
     args = parser.parse_args()
     print(vars(args))
     return args
@@ -147,7 +147,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     benchmark_size = benchmark.obtain_size()
     print(f"Benchmark size: {benchmark_size}")
     if args.quick_benchmark:
-        benchmark_size = min(benchmark_size, 5)
+        benchmark_size = min(benchmark_size, 33)
 
     # Run the benchmark
     split_inference_quantification = 1 if args.uncertainty in ["euq"] else 0
