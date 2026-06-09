@@ -17,8 +17,11 @@ from hotpot.check_agent import create_dtu_model_client
 
 QUESTION_INDEX = 0
 CONTEXT_SET_SIZE = 2
-ANSWER_TOKEN = "HOTPOT_ANSWER:"
-MODERATOR_NAME = "moderator"
+ANSWER_HISTORY_TOKEN = "ANSWER_HISTORY:"
+AGENT_ANSWER_TOKEN = "HOTPOT_ANSWER:"
+FINAL_ANSWER_TOKEN = "FINAL_HOTPOT_ANSWER:"
+CONFIDENCE_TOKEN = "CONFIDENCE:"
+ANSWER_MAX_WORDS = 5
 EVALUATOR_NAME = "evaluator"
 VERDICT_TOKEN = "VERDICT:"
 
@@ -102,9 +105,8 @@ def build_result_record(
     }
 
 
-def format_passage(title: str, sentences: list[str]) -> str:
-    body = " ".join(s.strip() for s in sentences if s.strip())
-    return f"Title: {title}\n\n{body}"
+def format_passage(sentences: list[str]) -> str:
+    return " ".join(s.strip() for s in sentences if s.strip())
 
 
 def build_context_sets(
@@ -118,7 +120,7 @@ def build_context_sets(
 
 
 def format_context_set(context_set: list[tuple[str, list[str]]]) -> str:
-    return "\n\n---\n\n".join(format_passage(title, sents) for title, sents in context_set)
+    return "\n\n---\n\n".join(format_passage(sents) for _, sents in context_set)
 
 
 def build_context_agents(model_client, row: dict) -> list[AssistantAgent]:
@@ -132,7 +134,18 @@ def build_context_agents(model_client, row: dict) -> list[AssistantAgent]:
             Do not invent facts outside these passages.
             Share relevant details from your passages with the other agents.
             Ask clarifying questions when you need facts another passage may contain.
-            Do not give the final answer yourself; the moderator will conclude later.
+            Every message must end with:
+            {ANSWER_HISTORY_TOKEN} <all previous {AGENT_ANSWER_TOKEN} values in the discussion in an array, e.g. ["answer1", "answer2", "answer3"]>
+            {AGENT_ANSWER_TOKEN} <your current best answer>
+            {CONFIDENCE_TOKEN} <percentage from 0% to 100%, e.g. 85%>
+            The answer after {AGENT_ANSWER_TOKEN} must be at most {ANSWER_MAX_WORDS} words.
+            {CONFIDENCE_TOKEN} reflects how certain you are of that answer.
+            When the group agrees on the final answer, also add:
+            {FINAL_ANSWER_TOKEN} <the agreed short answer>
+            {CONFIDENCE_TOKEN} <percentage from 0% to 100%, e.g. 85%>
+            The answer after {FINAL_ANSWER_TOKEN} must also be at most {ANSWER_MAX_WORDS} words.
+            The second {CONFIDENCE_TOKEN} reflects how certain you are of the final answer.
+            Only use {FINAL_ANSWER_TOKEN} once the group has reached consensus.
 
             {passages}
             """
@@ -148,35 +161,14 @@ def build_context_agents(model_client, row: dict) -> list[AssistantAgent]:
     return agents
 
 
-def build_moderator_agent(model_client, row: dict) -> AssistantAgent:
-    system_message = textwrap.dedent(
-        f"""\
-        You are the discussion moderator for a HotpotQA question.
-        You do not have your own Wikipedia passage.
-        Listen to the context agents, combine their evidence, and decide the best
-        short answer to the question below.
-        When you are ready to conclude, end your message with exactly one line:
-        {ANSWER_TOKEN} <short answer>
-
-        Question: {row["question"]}
-        """
-    )
-    return AssistantAgent(
-        MODERATOR_NAME,
-        model_client=model_client,
-        system_message=system_message,
-    )
-
-
 def build_discussion_team(model_client, row: dict) -> RoundRobinGroupChat:
     context_agents = build_context_agents(model_client, row)
-    moderator = build_moderator_agent(model_client, row)
-    agents = context_agents + [moderator]
-    max_turns = len(agents) * 2
+    agent_names = [agent.name for agent in context_agents]
+    max_turns = len(context_agents) * 2
     termination = AgentTextMentionTermination(
-        ANSWER_TOKEN, sources=[MODERATOR_NAME]
+        FINAL_ANSWER_TOKEN, sources=agent_names
     ) | MaxMessageTermination(max_turns)
-    return RoundRobinGroupChat(agents, termination_condition=termination)
+    return RoundRobinGroupChat(context_agents, termination_condition=termination)
 
 
 def print_agent_assignments(row: dict) -> None:
@@ -184,7 +176,6 @@ def print_agent_assignments(row: dict) -> None:
     for i, context_set in enumerate(build_context_sets(row)):
         titles = ", ".join(title for title, _ in context_set)
         print(f"  context_{i}: {titles}", flush=True)
-    print(f"  {MODERATOR_NAME}: synthesizes the final answer", flush=True)
     print(flush=True)
 
 
@@ -235,17 +226,33 @@ async def run_and_print_discussion(team: RoundRobinGroupChat, task: str) -> Task
     return result
 
 
+def extract_answer_after_token(text: str, token: str) -> str:
+    if token not in text:
+        return ""
+
+    remainder = text.split(token, 1)[1].strip()
+    for line in remainder.splitlines():
+        stripped = line.strip()
+        if (
+            not stripped
+            or stripped.startswith(CONFIDENCE_TOKEN)
+        ):
+            continue
+        return stripped.split(CONFIDENCE_TOKEN, 1)[0].strip()
+
+    return ""
+
+
 def extract_model_answer(result: TaskResult | None) -> str:
     if result is None:
         return ""
 
     for message in reversed(result.messages):
-        if not isinstance(message, TextMessage) or message.source != MODERATOR_NAME:
+        if not isinstance(message, TextMessage) or not message.source.startswith("context_"):
             continue
-        if ANSWER_TOKEN in message.content:
-            answer = message.content.split(ANSWER_TOKEN, 1)[1].strip()
-            return answer.splitlines()[0].strip()
-        return message.content.strip()
+        answer = extract_answer_after_token(message.content, FINAL_ANSWER_TOKEN)
+        if answer:
+            return answer
 
     return ""
 
@@ -324,7 +331,6 @@ async def evaluate_hotpot_answer(
     finally:
         if owns_client:
             await model_client.close()
-    pass
 
 
 def build_discussion_task(row: dict) -> str:
@@ -333,8 +339,18 @@ def build_discussion_task(row: dict) -> str:
         HotpotQA question: {row["question"]}
 
         Each context agent has been given a set of Wikipedia passages.
-        The context agents should discuss the evidence they have.
-        The moderator should listen to the discussion and provide the final answer.
+        Discuss the evidence together.
+        Every agent must end each message with:
+        {ANSWER_HISTORY_TOKEN} <all previous {AGENT_ANSWER_TOKEN} values in the discussion in an array, e.g. ["answer1", "answer2", "answer3"]>
+        {AGENT_ANSWER_TOKEN} <answer>
+        {CONFIDENCE_TOKEN} <percentage from 0% to 100%, e.g. 85%>
+        Each {AGENT_ANSWER_TOKEN} answer must be at most {ANSWER_MAX_WORDS} words.
+        {CONFIDENCE_TOKEN} reflects how certain the agent is of that answer.
+        When the group reaches consensus, the speaking agent should also add:
+        {FINAL_ANSWER_TOKEN} <answer>
+        {CONFIDENCE_TOKEN} <percentage from 0% to 100%, e.g. 85%>
+        Each {FINAL_ANSWER_TOKEN} answer must also be at most {ANSWER_MAX_WORDS} words.
+        The second {CONFIDENCE_TOKEN} reflects certainty in the final agreed answer.
         """
     )
 
@@ -344,7 +360,7 @@ async def discuss_hotpot_question(index: int = QUESTION_INDEX) -> HotpotDiscussi
     model_client = create_dtu_model_client()
     team = build_discussion_team(model_client, row)
     num_context_agents = len(build_context_sets(row))
-    max_turns = (num_context_agents + 1) * 2
+    max_turns = num_context_agents * 2
 
     print(f"Question index: {index}", flush=True)
     print(f"Question: {row['question']}", flush=True)
@@ -429,7 +445,6 @@ async def discuss_hotpot_question_quiet(
     finally:
         if owns_client:
             await model_client.close()
-    pass
 
 
 async def run_hotpot_discussion_with_evaluation(
