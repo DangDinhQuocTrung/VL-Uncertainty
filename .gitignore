@@ -1,3 +1,5 @@
 __pycache__
 exp
 exp_*
+.python-version
+uv.lock
