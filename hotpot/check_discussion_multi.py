@@ -11,8 +11,18 @@ from hotpot.check_discussion_single import (
 )
 
 QUESTION_START_INDEX = 0
-QUESTION_END_INDEX = 10
+QUESTION_END_INDEX = 100
 RESULTS_JSON_PATH = Path(__file__).with_name(f"discussion_results_{QUESTION_START_INDEX:04d}-{QUESTION_END_INDEX:04d}.json")
+def load_existing_records(output_path: Path) -> dict[str, dict]:
+    if not output_path.exists():
+        return {}
+
+    data = json.loads(output_path.read_text(encoding="utf-8"))
+    return {
+        key: value
+        for key, value in data.items()
+        if key.isdigit() and isinstance(value, dict)
+    }
 
 
 def collect_confidence_outcomes(
@@ -23,6 +33,7 @@ def collect_confidence_outcomes(
     pairs: list[tuple[float, float]] = []
     for record in records.values():
         confidence = record.get("confidence", 0.0)
+        confidence = 0.0 if confidence is None else confidence
         outcome = 1.0 if record[outcome_key] else 0.0
         pairs.append((float(confidence), outcome))
     return pairs
@@ -76,18 +87,54 @@ def compute_hotpot_metrics(records: dict[str, dict]) -> dict[str, float | None]:
     }
 
 
+def build_results(records: dict[str, dict]) -> dict:
+    num_questions = len(records)
+    num_correct = sum(1 for record in records.values() if record["correct"])
+    llm_accuracy = num_correct / num_questions if num_questions else 0.0
+    hotpot_metrics = compute_hotpot_metrics(records)
+
+    return {
+        **records,
+        "accuracy": llm_accuracy,
+        "em": hotpot_metrics["em"],
+        "f1": hotpot_metrics["f1"],
+        "brier_score": compute_brier_score(records),
+        "pearson_correlation": compute_pearson_correlation(records, outcome_key="correct"),
+        "pearson_correlation_em": compute_pearson_correlation(records, outcome_key="em"),
+    }
+
+
+def write_results(output_path: Path, results: dict) -> None:
+    output_path.write_text(
+        json.dumps(results, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
 async def run_hotpot_batch(
     start_index: int = QUESTION_START_INDEX,
     end_index: int = QUESTION_END_INDEX,
     output_path: Path = RESULTS_JSON_PATH,
 ) -> dict:
     dataset = load_hotpot_dataset()
-    records: dict[str, dict] = {}
+    records = load_existing_records(output_path)
+    if records:
+        print(f"Loaded {len(records)} existing records from {output_path}", flush=True)
+
     model_client = create_dtu_model_client()
+    total_questions = end_index - start_index
 
     try:
         for index in range(start_index, end_index):
-            print(f"\nRunning question {index} ({index - start_index + 1}/{end_index - start_index})...", flush=True)
+            if str(index) in records:
+                print(
+                    f"\nSkipping question {index} "
+                    f"({index - start_index + 1}/{total_questions}, already saved)",
+                    flush=True,
+                )
+                continue
+
+            print(f"\nRunning question {index} ({index - start_index + 1}/{total_questions})...", flush=True)
             output = await discuss_hotpot_question_quiet(
                 index,
                 dataset=dataset,
@@ -96,6 +143,7 @@ async def run_hotpot_batch(
             evaluation = await evaluate_hotpot_answer(output, model_client=model_client)
             record = build_result_record(output, evaluation)
             records[str(index)] = record
+            write_results(output_path, records)
             print(
                 f"  model_answer={record['model_answer']!r} "
                 f"gt_answer={record['gt_answer']!r} "
@@ -105,29 +153,21 @@ async def run_hotpot_batch(
                 f"f1={record['f1']:.3f}",
                 flush=True,
             )
+            print(f"  Saved progress to {output_path}", flush=True)
     finally:
         await model_client.close()
 
+    results = build_results(records)
+    write_results(output_path, results)
     num_questions = len(records)
     num_correct = sum(1 for record in records.values() if record["correct"])
-    llm_accuracy = num_correct / num_questions if num_questions else 0.0
-    hotpot_metrics = compute_hotpot_metrics(records)
-    brier_score = compute_brier_score(records)
-    pearson_correlation = compute_pearson_correlation(records, outcome_key="correct")
-    pearson_correlation_em = compute_pearson_correlation(records, outcome_key="em")
+    llm_accuracy = results["accuracy"]
+    hotpot_metrics = {"em": results["em"], "f1": results["f1"]}
+    brier_score = results["brier_score"]
+    pearson_correlation = results["pearson_correlation"]
+    pearson_correlation_em = results["pearson_correlation_em"]
 
-    results = {
-        **records,
-        "accuracy": llm_accuracy,
-        "em": hotpot_metrics["em"],
-        "f1": hotpot_metrics["f1"],
-        "brier_score": brier_score,
-        "pearson_correlation": pearson_correlation,
-        "pearson_correlation_em": pearson_correlation_em,
-    }
-
-    output_path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    print(f"\nWrote results to {output_path}", flush=True)
+    print(f"\nFinished. Results in {output_path}", flush=True)
     print(f"LLM accuracy: {num_correct}/{num_questions} = {llm_accuracy:.2%}", flush=True)
     if hotpot_metrics["em"] is None:
         print("HotpotQA EM: unavailable", flush=True)

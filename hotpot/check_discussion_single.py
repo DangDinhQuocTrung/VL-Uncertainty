@@ -16,7 +16,7 @@ from datasets import load_dataset
 from hotpot.check_agent import apply_no_think, create_dtu_model_client
 from hotpot.hotpot_eval import score_hotpot_answer
 
-QUESTION_INDEX = 7
+QUESTION_INDEX = 13
 CONTEXT_SET_SIZE = 2
 ANSWER_HISTORY_TOKEN = "ANSWER_HISTORY:"
 POSSIBLE_ANSWERS_TOKEN = "POSSIBLE_ANSWERS:"
@@ -152,9 +152,12 @@ def build_context_agents(model_client, row: dict) -> list[AssistantAgent]:
             Base {AGENT_ANSWER_TOKEN} only on facts in your passages. If your passages do not contain
             enough information to answer the question, output {AGENT_ANSWER_TOKEN} [] and {CONFIDENCE_TOKEN} 0%.
             Each answer string in the array must be at most {ANSWER_MAX_WORDS} words.
-            {CONFIDENCE_TOKEN} reflects how certain you are and allows the prediction of the correctness of your answer.
+            {CONFIDENCE_TOKEN} reflects how certain you are and allows the prediction of the correctness of your answer. BE HONEST.
             Therefore, you should give 0% for a wrong answer and 100% for a correct answer. This confidence will be evaluated with Brier score.
+            This confidence score should consider the length of the possible answers after {POSSIBLE_ANSWERS_TOKEN}.
+            If there are multiple good possible answers, the confidence score should be low.
             Please be conservative with your confidence score. Your accuracy for this task is 70%.
+            Remember that you can give multiple answers in your {AGENT_ANSWER_TOKEN} list and give a lower confidence score in case of multiple viable answers.
             Do not use {FINAL_ANSWER_TOKEN}; only the moderator may provide the final answer.
 
             {passages}
@@ -175,7 +178,8 @@ def build_moderator_agent(model_client, row: dict) -> AssistantAgent:
     system_message = textwrap.dedent(
         f"""\
         You are the discussion moderator for a knowledge-based question.
-        You do not have your own Wikipedia passages, but you are intelligent and perceptive.
+        You do not have your own Wikipedia passages, but you are analytical of the discussion.
+        However, please do not use your own knowledge to answer the question, but rely on the context agents' answers.
         Listen to the context agents, review their {AGENT_ANSWER_TOKEN} lists and discussion,
         and help the group reach the best short answer to the question below.
         You do not need to provide {AGENT_ANSWER_TOKEN}, {ANSWER_HISTORY_TOKEN}, or {CONFIDENCE_TOKEN}
@@ -183,7 +187,7 @@ def build_moderator_agent(model_client, row: dict) -> AssistantAgent:
         When you are not ready to conclude, discuss the evidence, summarize disagreements,
         and ask clarifying questions to the context agents.
         When you see an agent that expresses uncertainty but gives a high confidence score, ask it to explain its reasoning.
-        Only you may conclude the discussion.
+        Only you may conclude the discussion. You can answer "I don't know" with a low confidence score.
         Please give your reasoning and explanation for your confidence score.
         When you are ready to give the final answer, end your message with:
         {ANSWER_HISTORY_TOKEN} <all previous {AGENT_ANSWER_TOKEN} values in the discussion in an array, e.g. ["answer1", "answer2", "answer3"]>
@@ -192,10 +196,11 @@ def build_moderator_agent(model_client, row: dict) -> AssistantAgent:
         {CONFIDENCE_TOKEN} <percentage from 0% to 100%, e.g. 85%>
         {POSSIBLE_ANSWERS_TOKEN} should consider different answers of the context agents, as well as possible answers within one context agent.
         The answer after {FINAL_ANSWER_TOKEN} must be at most {ANSWER_MAX_WORDS} words.
-        {CONFIDENCE_TOKEN} reflects how certain you are and allows the prediction of the correctness of the final answer.
+        {CONFIDENCE_TOKEN} reflects how certain you are and allows the prediction of the correctness of the final answer. BE HONEST.
         Therefore, you should give 0% for a wrong answer and 100% for a correct answer. This confidence will be evaluated with Brier score.
-        This confidence score should consider the length of the possible answers after {POSSIBLE_ANSWERS_TOKEN}. If there are two good possible answers, the confidence score should be close to 50%.
-        This confidence score should consider the confidence scores of the context agents. If the context agents are uncertain about their answers, the confidence score should be low.
+        This confidence score should be low when there are multiple possible answers.
+        This confidence score should be low when the context agents are uncertain or fail to answer.
+        This confidence score should be low when the context agents cannot agree on an answer.
         Please be conservative with your confidence score. Your accuracy for this task is 70%.
 
         Question: {row["question"]}
@@ -451,8 +456,7 @@ def build_discussion_task(row: dict) -> str:
         {ANSWER_HISTORY_TOKEN} <all previous {AGENT_ANSWER_TOKEN} values in the discussion in an array, e.g. [["a1"], ["a2", "a3"]]>
         {AGENT_ANSWER_TOKEN} <a JSON array of possible answers from that agent's passages, e.g. ["answer1", "answer2"]>
         {CONFIDENCE_TOKEN} <percentage from 0% to 100%, e.g. 85%>
-        If a context agent's passages do not contain enough information, it must output
-        {AGENT_ANSWER_TOKEN} [] and {CONFIDENCE_TOKEN} 0%.
+        If a context agent's passages do not contain enough information, it must output {AGENT_ANSWER_TOKEN} [] and {CONFIDENCE_TOKEN} 0%.
         Each answer string in the array must be at most {ANSWER_MAX_WORDS} words.
         {CONFIDENCE_TOKEN} reflects how certain the agent is of its answers.
         The moderator does not need to provide {AGENT_ANSWER_TOKEN} on every turn.
