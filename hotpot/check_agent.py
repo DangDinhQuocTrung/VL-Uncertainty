@@ -12,6 +12,14 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 DTU_BASE_URL = "https://hackerton2026.compute.dtu.dk/v1"
 DTU_MODEL = "alibaba/qwen-3.6-35b-a3b"
 DTU_API_KEY = "sk-oJU1JCZtvh5YDqy4hjIIaA"
+NO_THINK_DIRECTIVE = "/no_think"
+
+
+def apply_no_think(prompt: str) -> str:
+    prompt = prompt.rstrip()
+    if prompt.endswith(NO_THINK_DIRECTIVE):
+        return prompt
+    return f"{prompt}\n{NO_THINK_DIRECTIVE}"
 
 
 def create_dtu_model_client(
@@ -29,10 +37,14 @@ def create_dtu_model_client(
         model=model,
         base_url=base_url,
         api_key=key,
+        seed=99,
+        temperature=0.0,
+        max_retries=3,
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         model_info={
             "vision": False,
-            "function_calling": True,
-            "json_output": True,
+            "function_calling": False,
+            "json_output": False,
             "family": ModelFamily.UNKNOWN,
             "structured_output": False,
         },
@@ -49,7 +61,7 @@ async def chat(
     assistant = AssistantAgent(
         "assistant",
         model_client=model_client,
-        system_message=system_message,
+        system_message=apply_no_think(system_message),
     )
 
     termination = TextMentionTermination("TERMINATE")

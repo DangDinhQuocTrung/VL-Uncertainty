@@ -3,6 +3,7 @@ from datasets import load_dataset
 
 def check_dataset():
     hotpot_qa = load_dataset("hotpotqa/hotpot_qa", "distractor")
+    print(hotpot_qa["validation"].num_rows)
     for row in hotpot_qa["validation"]:
         question = row["question"]
         answer = row["answer"]
