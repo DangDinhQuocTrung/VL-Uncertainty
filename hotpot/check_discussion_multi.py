@@ -10,23 +10,70 @@ from hotpot.check_discussion_single import (
     load_hotpot_dataset,
 )
 
-QUESTION_START_INDEX = 200
-QUESTION_END_INDEX = 300
+QUESTION_START_INDEX = 0
+QUESTION_END_INDEX = 10
 RESULTS_JSON_PATH = Path(__file__).with_name(f"discussion_results_{QUESTION_START_INDEX:04d}-{QUESTION_END_INDEX:04d}.json")
 
 
-def compute_brier_score(records: dict[str, dict]) -> float | None:
-    scores: list[float] = []
+def collect_confidence_outcomes(
+    records: dict[str, dict],
+    *,
+    outcome_key: str = "correct",
+) -> list[tuple[float, float]]:
+    pairs: list[tuple[float, float]] = []
     for record in records.values():
-        confidence = record.get("confidence")
-        if confidence is None:
-            continue
-        outcome = 1.0 if record["correct"] else 0.0
-        scores.append((float(confidence) - outcome) ** 2)
+        confidence = record.get("confidence", 0.0)
+        outcome = 1.0 if record[outcome_key] else 0.0
+        pairs.append((float(confidence), outcome))
+    return pairs
 
-    if not scores:
+
+def compute_brier_score(records: dict[str, dict]) -> float | None:
+    pairs = collect_confidence_outcomes(records, outcome_key="correct")
+    if not pairs:
         return None
-    return sum(scores) / len(scores)
+    return sum((confidence - outcome) ** 2 for confidence, outcome in pairs) / len(pairs)
+
+
+def compute_pearson_correlation(
+    records: dict[str, dict],
+    *,
+    outcome_key: str = "correct",
+) -> float | None:
+    pairs = collect_confidence_outcomes(records, outcome_key=outcome_key)
+    if len(pairs) < 2:
+        return None
+
+    confidences = [confidence for confidence, _ in pairs]
+    outcomes = [outcome for _, outcome in pairs]
+    n = len(pairs)
+
+    mean_confidence = sum(confidences) / n
+    mean_outcome = sum(outcomes) / n
+
+    covariance = sum(
+        (confidence - mean_confidence) * (outcome - mean_outcome)
+        for confidence, outcome in pairs
+    )
+    confidence_std = sum((confidence - mean_confidence) ** 2 for confidence in confidences) ** 0.5
+    outcome_std = sum((outcome - mean_outcome) ** 2 for outcome in outcomes) ** 0.5
+
+    if confidence_std == 0.0 or outcome_std == 0.0:
+        return None
+
+    return covariance / (confidence_std * outcome_std)
+
+
+def compute_hotpot_metrics(records: dict[str, dict]) -> dict[str, float | None]:
+    if not records:
+        return {"em": None, "f1": None}
+
+    em_scores = [float(record["em"]) for record in records.values() if "em" in record]
+    f1_scores = [float(record["f1"]) for record in records.values() if "f1" in record]
+    return {
+        "em": sum(em_scores) / len(em_scores) if em_scores else None,
+        "f1": sum(f1_scores) / len(f1_scores) if f1_scores else None,
+    }
 
 
 async def run_hotpot_batch(
@@ -53,7 +100,9 @@ async def run_hotpot_batch(
                 f"  model_answer={record['model_answer']!r} "
                 f"gt_answer={record['gt_answer']!r} "
                 f"confidence={record['confidence']} "
-                f"correct={record['correct']}",
+                f"correct={record['correct']} "
+                f"em={record['em']} "
+                f"f1={record['f1']:.3f}",
                 flush=True,
             )
     finally:
@@ -61,22 +110,57 @@ async def run_hotpot_batch(
 
     num_questions = len(records)
     num_correct = sum(1 for record in records.values() if record["correct"])
-    accuracy = num_correct / num_questions if num_questions else 0.0
+    llm_accuracy = num_correct / num_questions if num_questions else 0.0
+    hotpot_metrics = compute_hotpot_metrics(records)
     brier_score = compute_brier_score(records)
+    pearson_correlation = compute_pearson_correlation(records, outcome_key="correct")
+    pearson_correlation_em = compute_pearson_correlation(records, outcome_key="em")
 
     results = {
         **records,
-        "accuracy": accuracy,
+        "accuracy": llm_accuracy,
+        "em": hotpot_metrics["em"],
+        "f1": hotpot_metrics["f1"],
         "brier_score": brier_score,
+        "pearson_correlation": pearson_correlation,
+        "pearson_correlation_em": pearson_correlation_em,
     }
 
     output_path.write_text(json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"\nWrote results to {output_path}", flush=True)
-    print(f"Accuracy: {num_correct}/{num_questions} = {accuracy:.2%}", flush=True)
-    if brier_score is None:
-        print("Brier score: unavailable (no confidence scores parsed)", flush=True)
+    print(f"LLM accuracy: {num_correct}/{num_questions} = {llm_accuracy:.2%}", flush=True)
+    if hotpot_metrics["em"] is None:
+        print("HotpotQA EM: unavailable", flush=True)
     else:
-        print(f"Brier score: {brier_score:.4f}", flush=True)
+        print(f"HotpotQA EM: {hotpot_metrics['em']:.2%}", flush=True)
+    if hotpot_metrics["f1"] is None:
+        print("HotpotQA F1: unavailable", flush=True)
+    else:
+        print(f"HotpotQA F1: {hotpot_metrics['f1']:.4f}", flush=True)
+    if brier_score is None:
+        print("Brier score (vs LLM correctness): unavailable", flush=True)
+    else:
+        print(f"Brier score (vs LLM correctness): {brier_score:.4f}", flush=True)
+    if pearson_correlation is None:
+        print(
+            "Pearson correlation (confidence vs LLM correctness): unavailable",
+            flush=True,
+        )
+    else:
+        print(
+            f"Pearson correlation (confidence vs LLM correctness): {pearson_correlation:.4f}",
+            flush=True,
+        )
+    if pearson_correlation_em is None:
+        print(
+            "Pearson correlation (confidence vs HotpotQA EM): unavailable",
+            flush=True,
+        )
+    else:
+        print(
+            f"Pearson correlation (confidence vs HotpotQA EM): {pearson_correlation_em:.4f}",
+            flush=True,
+        )
 
     return results
 

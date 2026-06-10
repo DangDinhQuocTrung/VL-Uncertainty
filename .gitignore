@@ -3,3 +3,4 @@ exp
 exp_*
 .python-version
 uv.lock
+*.json

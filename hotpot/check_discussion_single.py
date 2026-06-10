@@ -14,12 +14,14 @@ from autogen_agentchat.teams import RoundRobinGroupChat
 from datasets import load_dataset
 
 from hotpot.check_agent import apply_no_think, create_dtu_model_client
+from hotpot.hotpot_eval import score_hotpot_answer
 
 QUESTION_INDEX = 7
 CONTEXT_SET_SIZE = 2
 ANSWER_HISTORY_TOKEN = "ANSWER_HISTORY:"
-AGENT_ANSWER_TOKEN = "HOTPOT_ANSWER:"
-FINAL_ANSWER_TOKEN = "FINAL_HOTPOT_ANSWER:"
+POSSIBLE_ANSWERS_TOKEN = "POSSIBLE_ANSWERS:"
+AGENT_ANSWER_TOKEN = "ANSWERS:"
+FINAL_ANSWER_TOKEN = "FINAL_ANSWER:"
 CONFIDENCE_TOKEN = "CONFIDENCE:"
 ANSWER_MAX_WORDS = 5
 MODERATOR_NAME = "moderator"
@@ -99,12 +101,15 @@ def build_result_record(
     output: HotpotDiscussionOutput,
     evaluation: HotpotEvaluationResult,
 ) -> dict[str, str | bool | float | None]:
+    hotpot_scores = score_hotpot_answer(output.model_answer, output.ground_truth)
     return {
         "question": output.question,
         "gt_answer": output.ground_truth,
         "model_answer": output.model_answer,
         "confidence": output.confidence,
         "correct": evaluation.correct,
+        "em": hotpot_scores["em"],
+        "f1": hotpot_scores["f1"],
     }
 
 
@@ -140,11 +145,13 @@ def build_context_agents(model_client, row: dict) -> list[AssistantAgent]:
             Ask clarifying questions when you need facts another passage may contain.
             Please be concise and to the point.
             Every time you speak, your message must end with:
-            {ANSWER_HISTORY_TOKEN} <all previous {AGENT_ANSWER_TOKEN} values in the discussion in an array, e.g. ["answer1", "answer2", "answer3"]>
-            {AGENT_ANSWER_TOKEN} <your current best answer>
+            {ANSWER_HISTORY_TOKEN} <all previous {AGENT_ANSWER_TOKEN} values in the discussion in an array, e.g. [["a1"], ["a2", "a3"]]>
+            {AGENT_ANSWER_TOKEN} <a JSON array of possible answers supported by your passages, e.g. ["answer1", "answer2"]>
             {CONFIDENCE_TOKEN} <percentage from 0% to 100%, e.g. 85%>
-            You must provide a {AGENT_ANSWER_TOKEN} on every turn.
-            The answer after {AGENT_ANSWER_TOKEN} must be at most {ANSWER_MAX_WORDS} words.
+            You must provide {AGENT_ANSWER_TOKEN} on every turn.
+            Base {AGENT_ANSWER_TOKEN} only on facts in your passages. If your passages do not contain
+            enough information to answer the question, output {AGENT_ANSWER_TOKEN} [] and {CONFIDENCE_TOKEN} 0%.
+            Each answer string in the array must be at most {ANSWER_MAX_WORDS} words.
             {CONFIDENCE_TOKEN} reflects how certain you are and allows the prediction of the correctness of your answer.
             Therefore, you should give 0% for a wrong answer and 100% for a correct answer. This confidence will be evaluated with Brier score.
             Please be conservative with your confidence score. Your accuracy for this task is 70%.
@@ -165,11 +172,11 @@ def build_context_agents(model_client, row: dict) -> list[AssistantAgent]:
 
 
 def build_moderator_agent(model_client, row: dict) -> AssistantAgent:
-    system_message = apply_no_think(textwrap.dedent(
+    system_message = textwrap.dedent(
         f"""\
-        You are the discussion moderator for a HotpotQA question.
+        You are the discussion moderator for a knowledge-based question.
         You do not have your own Wikipedia passages, but you are intelligent and perceptive.
-        Listen to the context agents, review their {AGENT_ANSWER_TOKEN} lines and discussion,
+        Listen to the context agents, review their {AGENT_ANSWER_TOKEN} lists and discussion,
         and help the group reach the best short answer to the question below.
         You do not need to provide {AGENT_ANSWER_TOKEN}, {ANSWER_HISTORY_TOKEN}, or {CONFIDENCE_TOKEN}
         unless you are concluding the discussion.
@@ -177,18 +184,23 @@ def build_moderator_agent(model_client, row: dict) -> AssistantAgent:
         and ask clarifying questions to the context agents.
         When you see an agent that expresses uncertainty but gives a high confidence score, ask it to explain its reasoning.
         Only you may conclude the discussion.
+        Please give your reasoning and explanation for your confidence score.
         When you are ready to give the final answer, end your message with:
         {ANSWER_HISTORY_TOKEN} <all previous {AGENT_ANSWER_TOKEN} values in the discussion in an array, e.g. ["answer1", "answer2", "answer3"]>
+        {POSSIBLE_ANSWERS_TOKEN} <all possible answers to the question in an array, e.g. ["answer1", "answer2", "answer3"]>
         {FINAL_ANSWER_TOKEN} <the agreed short answer>
         {CONFIDENCE_TOKEN} <percentage from 0% to 100%, e.g. 85%>
+        {POSSIBLE_ANSWERS_TOKEN} should consider different answers of the context agents, as well as possible answers within one context agent.
         The answer after {FINAL_ANSWER_TOKEN} must be at most {ANSWER_MAX_WORDS} words.
         {CONFIDENCE_TOKEN} reflects how certain you are and allows the prediction of the correctness of the final answer.
         Therefore, you should give 0% for a wrong answer and 100% for a correct answer. This confidence will be evaluated with Brier score.
+        This confidence score should consider the length of the possible answers after {POSSIBLE_ANSWERS_TOKEN}. If there are two good possible answers, the confidence score should be close to 50%.
+        This confidence score should consider the confidence scores of the context agents. If the context agents are uncertain about their answers, the confidence score should be low.
         Please be conservative with your confidence score. Your accuracy for this task is 70%.
 
         Question: {row["question"]}
         """
-    ))
+    )
     return AssistantAgent(
         MODERATOR_NAME,
         model_client=model_client,
@@ -200,7 +212,7 @@ def build_discussion_team(model_client, row: dict) -> RoundRobinGroupChat:
     context_agents = build_context_agents(model_client, row)
     moderator = build_moderator_agent(model_client, row)
     agents = context_agents + [moderator]
-    max_turns = int(len(agents) * 1.5)
+    max_turns = int(len(agents) * 2)
     termination = AgentTextMentionTermination(
         FINAL_ANSWER_TOKEN, sources=[MODERATOR_NAME]
     ) | MaxMessageTermination(max_turns)
@@ -278,6 +290,8 @@ def extract_answer_after_token(text: str, token: str) -> str:
             not stripped
             or stripped.startswith(CONFIDENCE_TOKEN)
             or stripped.startswith(ANSWER_HISTORY_TOKEN)
+            or stripped.startswith(AGENT_ANSWER_TOKEN)
+            or stripped.startswith(POSSIBLE_ANSWERS_TOKEN)
         ):
             continue
         return stripped.split(CONFIDENCE_TOKEN, 1)[0].strip()
@@ -428,21 +442,24 @@ async def evaluate_hotpot_answer(
 def build_discussion_task(row: dict) -> str:
     return apply_no_think(textwrap.dedent(
         f"""\
-        HotpotQA question: {row["question"]}
+        Uncertainty-aware knowledge-based question: {row["question"]}
 
         Each context agent has been given a set of Wikipedia passages.
         Discuss the evidence together.
-        Each context agent must provide a {AGENT_ANSWER_TOKEN} every time it speaks.
+        Each context agent must provide {AGENT_ANSWER_TOKEN} every time it speaks.
         Each context agent message must end with:
-        {ANSWER_HISTORY_TOKEN} <all previous {AGENT_ANSWER_TOKEN} values in the discussion in an array, e.g. ["answer1", "answer2", "answer3"]>
-        {AGENT_ANSWER_TOKEN} <answer>
+        {ANSWER_HISTORY_TOKEN} <all previous {AGENT_ANSWER_TOKEN} values in the discussion in an array, e.g. [["a1"], ["a2", "a3"]]>
+        {AGENT_ANSWER_TOKEN} <a JSON array of possible answers from that agent's passages, e.g. ["answer1", "answer2"]>
         {CONFIDENCE_TOKEN} <percentage from 0% to 100%, e.g. 85%>
-        Each {AGENT_ANSWER_TOKEN} answer must be at most {ANSWER_MAX_WORDS} words.
-        {CONFIDENCE_TOKEN} reflects how certain the agent is of that answer.
+        If a context agent's passages do not contain enough information, it must output
+        {AGENT_ANSWER_TOKEN} [] and {CONFIDENCE_TOKEN} 0%.
+        Each answer string in the array must be at most {ANSWER_MAX_WORDS} words.
+        {CONFIDENCE_TOKEN} reflects how certain the agent is of its answers.
         The moderator does not need to provide {AGENT_ANSWER_TOKEN} on every turn.
         When not concluding, the moderator may discuss the evidence and ask questions.
         Only the moderator may conclude with:
         {ANSWER_HISTORY_TOKEN} <all previous {AGENT_ANSWER_TOKEN} values in the discussion in an array, e.g. ["answer1", "answer2", "answer3"]>
+        {POSSIBLE_ANSWERS_TOKEN} <all possible answers to the question in an array, e.g. ["answer1", "answer2", "answer3"]>
         {FINAL_ANSWER_TOKEN} <answer>
         {CONFIDENCE_TOKEN} <percentage from 0% to 100%, e.g. 85%>
         Each {FINAL_ANSWER_TOKEN} answer must be at most {ANSWER_MAX_WORDS} words.
@@ -455,7 +472,7 @@ async def discuss_hotpot_question(index: int = QUESTION_INDEX) -> HotpotDiscussi
     model_client = create_dtu_model_client()
     team = build_discussion_team(model_client, row)
     num_context_agents = len(build_context_sets(row))
-    max_turns = int((num_context_agents + 1) * 1.5)
+    max_turns = int((num_context_agents + 1) * 2)
 
     print(f"Question index: {index}", flush=True)
     print(f"Question: {row['question']}", flush=True)
