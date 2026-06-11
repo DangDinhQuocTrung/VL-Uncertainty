@@ -50,10 +50,32 @@ def compute_auroc(confidences: list[float], outcomes: list[float]) -> float | No
     return auroc(preds, targets, task="binary").item()
 
 
+def compute_pearson_correlation(confidences: list[float], outcomes: list[float]) -> float | None:
+    if len(confidences) < 2:
+        return None
+
+    n = len(confidences)
+    mean_confidence = sum(confidences) / n
+    mean_outcome = sum(outcomes) / n
+
+    covariance = sum(
+        (confidence - mean_confidence) * (outcome - mean_outcome)
+        for confidence, outcome in zip(confidences, outcomes)
+    )
+    confidence_std = sum((confidence - mean_confidence) ** 2 for confidence in confidences) ** 0.5
+    outcome_std = sum((outcome - mean_outcome) ** 2 for outcome in outcomes) ** 0.5
+
+    if confidence_std == 0.0 or outcome_std == 0.0:
+        return None
+
+    return covariance / (confidence_std * outcome_std)
+
+
 def evaluate(confidences: list[float], outcomes: list[float]) -> dict[str, float | None]:
     return {
         "brier_score": compute_brier_score(confidences, outcomes),
         "auroc": compute_auroc(confidences, outcomes),
+        "pearson_correlation": compute_pearson_correlation(confidences, outcomes),
     }
 
 
@@ -78,10 +100,20 @@ def run_calibration(results_path: Path = RESULTS_JSON_PATH) -> dict:
     print("Original confidence:")
     print(f"  Brier score: {raw_metrics['brier_score']:.4f}" if raw_metrics["brier_score"] is not None else "  Brier score: unavailable")
     print(f"  AUROC:       {raw_metrics['auroc']:.4f}" if raw_metrics["auroc"] is not None else "  AUROC:       unavailable")
+    print(
+        f"  Pearson:     {raw_metrics['pearson_correlation']:.4f}"
+        if raw_metrics["pearson_correlation"] is not None
+        else "  Pearson:     unavailable"
+    )
     print()
     print("Calibrated confidence:")
     print(f"  Brier score: {calibrated_metrics['brier_score']:.4f}" if calibrated_metrics["brier_score"] is not None else "  Brier score: unavailable")
     print(f"  AUROC:       {calibrated_metrics['auroc']:.4f}" if calibrated_metrics["auroc"] is not None else "  AUROC:       unavailable")
+    print(
+        f"  Pearson:     {calibrated_metrics['pearson_correlation']:.4f}"
+        if calibrated_metrics["pearson_correlation"] is not None
+        else "  Pearson:     unavailable"
+    )
 
     return {
         "num_records": len(records),
@@ -92,7 +124,7 @@ def run_calibration(results_path: Path = RESULTS_JSON_PATH) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Calibrate confidence scores and compute Brier score and AUROC."
+        description="Calibrate confidence scores and compute Brier score, AUROC, and Pearson correlation."
     )
     parser.add_argument(
         "--input",

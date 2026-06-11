@@ -1,9 +1,11 @@
 import asyncio
+import json
 import re
 import sys
 import textwrap
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.base import TaskResult, TerminationCondition
@@ -16,7 +18,9 @@ from datasets import load_dataset
 from hotpot.check_agent import apply_no_think, create_dtu_model_client
 from hotpot.hotpot_eval import score_hotpot_answer
 
-QUESTION_INDEX = 13
+# 55, 70, 77, 88
+# 30, 47, 49, 54, 58, 69
+QUESTION_INDEX = 88
 CONTEXT_SET_SIZE = 2
 ANSWER_HISTORY_TOKEN = "ANSWER_HISTORY:"
 POSSIBLE_ANSWERS_TOKEN = "POSSIBLE_ANSWERS:"
@@ -111,6 +115,20 @@ def build_result_record(
         "em": hotpot_scores["em"],
         "f1": hotpot_scores["f1"],
     }
+
+
+def single_result_path(index: int) -> Path:
+    return Path(__file__).with_name(f"discussion_result_{index:04d}.json")
+
+
+def write_single_result(index: int, record: dict) -> Path:
+    output_path = single_result_path(index)
+    payload = {str(index): record}
+    output_path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return output_path
 
 
 def format_passage(title: str, sentences: list[str]) -> str:
@@ -560,10 +578,13 @@ async def run_hotpot_discussion_with_evaluation(
 ) -> tuple[HotpotDiscussionOutput, HotpotEvaluationResult]:
     output = await discuss_hotpot_question(index)
     evaluation = await evaluate_hotpot_answer(output)
+    record = build_result_record(output, evaluation)
+    output_path = write_single_result(index, record)
 
     print("\nEvaluation:", flush=True)
     print(f"  Correct: {evaluation.correct}", flush=True)
     print(f"  Explanation:\n{evaluation.explanation}", flush=True)
+    print(f"\nWrote result to {output_path}", flush=True)
 
     return output, evaluation
 
