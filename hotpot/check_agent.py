@@ -10,10 +10,10 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 
 
 DTU_BASE_URL = "https://hackerton2026.compute.dtu.dk/v1"
-DTU_API_KEY = "sk-oJU1JCZtvh5YDqy4hjIIaA"
+DTU_API_KEY = ""
 DTU_MODEL = "alibaba/qwen-3.6-35b-a3b"
 # DTU_BASE_URL = "https://openrouter.ai/api/v1"
-# DTU_API_KEY = "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"
+# DTU_API_KEY = ""
 # DTU_MODEL = "qwen/qwen3.6-35b-a3b"
 NO_THINK_DIRECTIVE = "/no_think"
 
