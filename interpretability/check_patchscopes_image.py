@@ -1,73 +1,22 @@
+from pathlib import Path
+
+import numpy as np
 import torch
 from transformers import AutoProcessor, AutoTokenizer, AutoModel, AutoModelForCausalLM, AutoModelForImageTextToText
 from PIL import Image
 
-from methods.vauq import compute_attention_over_visual_tokens
-from interpretability.check_patchscopes_text import get_transformer_layers, get_num_layers
+from methods.vauq_utils import compute_attention_over_visual_tokens
+from interpretability.scopes_lens_utils import load_model, get_num_layers, get_transformer_layers, get_post_hook, logit_lens_on_token
 
 
-def load_model(model_name, dtype=torch.float32, device=None, trust_remote_code=True):
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    else:
-        device = torch.device(device)
-
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=trust_remote_code)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    load_kwargs = dict(trust_remote_code=trust_remote_code, torch_dtype=dtype, attn_implementation="eager")
-    try:
-        model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
-    except (ValueError, KeyError, TypeError):
-        try:
-            model = AutoModelForImageTextToText.from_pretrained(model_name, **load_kwargs)
-        except (ValueError, KeyError, TypeError):
-            model = AutoModel.from_pretrained(model_name, **load_kwargs)
-    model = model.to(device).eval()
-    return model, tokenizer
-
-
-def get_pre_hook(name, position, patched_hidden_state, generation_mode=True):
-    def pre_hook(module, input_):
-        hidden_states = input_[0]
-        input_len = len(hidden_states[0])
-        if generation_mode and input_len == 1:
-            return
-        diff = torch.sum(torch.abs(hidden_states[:, position] - patched_hidden_state))
-        hidden_states[:, position] = patched_hidden_state
-        print("Patched", position, diff)
-
-    return pre_hook
-
-
-def get_post_hook(name, position, patched_hidden_state, generation_mode=True):
-    def post_hook(module, input_, output_):
-        if "skip_ln" in name:
-            # output_: (batch, sequence, hidden_state)
-            output_len = len(output_[0])
-        else:
-            # output_[0]: (batch, sequence, hidden_state)
-            output_len = len(output_[0][0])
-
-        if generation_mode and output_len == 1:
-            return
-        hs = output_[0][position] if "skip_ln" in name else output_[0][0, position]
-        diff = torch.sum(torch.abs(hs - patched_hidden_state))
-        if "skip_ln" in name:
-            output_[0][position] = patched_hidden_state
-        else:
-            output_[0][0, position] = patched_hidden_state
-        print("Patched", position, diff)
-
-    return post_hook
+MODEL_NAME = "google/gemma-3-12b-it"
 
 
 def check_patchscopes():
     # Load a VLM and its processor
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model, tokenizer = load_model("Qwen/Qwen2.5-VL-7B-Instruct", dtype=torch.bfloat16, device=device)
-    processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-7B-Instruct")
+    model, tokenizer = load_model(MODEL_NAME, dtype=torch.bfloat16, device=device)
+    processor = AutoProcessor.from_pretrained(MODEL_NAME)
     num_layers = get_num_layers(model)
     print("Model number of layers:", num_layers)
 
@@ -83,11 +32,13 @@ def check_patchscopes():
     inputs = processor(images=[image], text=[text_prompt], return_tensors="pt", padding=True).to(device)
     print("Inputs:", len(inputs["input_ids"][0]))
     # print(inputs["input_ids"][0])
-    # print("-" + processor.decode(torch.tensor([26713]), skip_special_tokens=True) + "-")
+    # print("-" + processor.decode(torch.tensor([262144]), skip_special_tokens=False) + "-")
+    # print(processor.tokenizer.all_special_tokens)
     chosen_token_id = 2168  # " image" token
     chosen_token_id = 37232  # " drones" token
     chosen_token_id = 26713  # " drone" token
     chosen_token_id = tokenizer.encode(" image", add_special_tokens=False)[0]
+    chosen_token_id = tokenizer.encode("<end_of_image>", add_special_tokens=False)[0]
 
     # Extract hidden states — pass all processor outputs
     with torch.no_grad():
@@ -110,22 +61,38 @@ def check_patchscopes():
             return_dict_in_generate=True,
         )
     image_token_id, visual_token_positions, visual_token_start_index, visual_token_end_index, sum_attention_over_visual_tokens, sum_attention_over_layers = compute_attention_over_visual_tokens(
-        model, processor, inputs, generated_outputs, "Qwen2.5-VL-7B-Instruct", device)
+        model, processor, inputs, generated_outputs, MODEL_NAME, device)
     top_k_indices = torch.topk(sum_attention_over_visual_tokens, 40).indices
     top_k_visual_token_positions = visual_token_positions[top_k_indices]
     print("Top visual token positions:", len(top_k_visual_token_positions), top_k_visual_token_positions)
 
     # Hooking
-    chosen_position = top_k_visual_token_positions[0]
-    # chosen_position = inputs["input_ids"][0].tolist().index(chosen_token_id)
+    # chosen_position = top_k_visual_token_positions[0]
+    chosen_position = inputs["input_ids"][0].tolist().index(chosen_token_id)
     # chosen_position = inputs["input_ids"][0].tolist().index(151653)
     # chosen_position = max(i for i, x in enumerate(inputs["input_ids"][0].tolist()) if x == 151655)
     target_layer = num_layers - 2
     chosen_hidden_states = hidden_states[target_layer + 1][:, chosen_position, :]
     print("Chosen hidden states:", target_layer, chosen_position, chosen_hidden_states.shape, chosen_hidden_states.mean(), chosen_hidden_states.std())
 
-    prompt = "cat -> cat\n1135 -> 1135\nhello -> hello\n? ->"
-    # prompt = f"Syria: Country in the Middle East\nLeonardo DiCaprio: American actor\nSamsung: South Korean multinational major appliance and consumer electronics corporation\n?"
+    # Lens
+    weight_dir = Path("/work3/dida/outputs_LVLM/patchscopes_full_pile/google/gemma-3-12b-it_mappings_pile")
+    last_layer = num_layers - 1
+    mapping_file = weight_dir / f"mapping_{target_layer:02d}-{last_layer:02d}.npy"
+    mapping = np.load(mapping_file)
+    pad = lambda x: np.hstack([x, np.ones((x.shape[0], 1))])
+    unpad = lambda x: x[:, :-1]
+    transform = lambda x: torch.tensor(
+        np.squeeze(unpad(np.dot(pad(np.expand_dims(x.detach().cpu().float().numpy(), 0)), mapping))),
+        dtype=torch.bfloat16,
+    ).to(device)
+    U_lh = model.language_model.lm_head.weight
+    mapped_hidden_states = transform(chosen_hidden_states[0]).unsqueeze(0)
+    lens_tokens = logit_lens_on_token(U_lh, mapped_hidden_states, tokenizer)
+    print("Logit lens tokens:", lens_tokens)
+
+    # prompt = "cat -> cat\n1135 -> 1135\nhello -> hello\n? ->"
+    prompt = f"Syria: Country in the Middle East\nLeonardo DiCaprio: American actor\nSamsung: South Korean multinational major appliance and consumer electronics corporation\n?"
     # prompt = "?"
     # messages = [{"role": "user", "content": [
     #     {"type": "text", "text": prompt},
@@ -135,7 +102,7 @@ def check_patchscopes():
     inputs = processor(text=[prompt], return_tensors="pt", padding=True).to(device)
     print("Inputs:", len(inputs["input_ids"][0]))
     # print(inputs["input_ids"][0])
-    print(processor.decode(inputs["input_ids"][0], skip_special_tokens=True))
+    # print(processor.decode(inputs["input_ids"][0], skip_special_tokens=True))
     # print("-" + processor.decode(torch.tensor([30]), skip_special_tokens=True) + "-")
     # print("-" + processor.decode(torch.tensor([937]), skip_special_tokens=True) + "-")
 

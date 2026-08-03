@@ -1,7 +1,7 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from interpretability.check_lens_text import logit_lens_on_token
+from interpretability.scopes_lens_utils import load_model, get_num_layers, get_transformer_layers, get_post_hook, logit_lens_on_token
 
 
 MODEL_NAME = "google/gemma-3-12b-it"
@@ -86,9 +86,10 @@ def check_patchscopes():
     # Source prompt: extract a hidden state from a specific token position.
     # prompt_source = "Patchscopes is robust. It helps interpret..."
     prompt_source = "Amazon's former CEO attented Oscars"
+    # prompt_source = "The president of the US attended Oscars"
     inputs_source = tokenizer(prompt_source, return_tensors="pt").to(device)
     print("Source inputs:", len(inputs_source["input_ids"][0]))
-    print(tokenizer.decode(inputs_source["input_ids"][0], skip_special_tokens=False))
+    print([tokenizer.decode(token_id, skip_special_tokens=False) for token_id in inputs_source["input_ids"][0]])
 
     with torch.no_grad():
         outputs_source = model(**inputs_source, output_hidden_states=True, return_dict=True)
@@ -97,13 +98,15 @@ def check_patchscopes():
 
     # Token to patch from (e.g. " CEO" in the source sentence).
     chosen_token_id = tokenizer.encode(" CEO", add_special_tokens=False)[0]
+    # chosen_token_id = tokenizer.encode(" US", add_special_tokens=False)[0]
     chosen_position = inputs_source["input_ids"][0].tolist().index(chosen_token_id)
-    target_layer = num_layers - 25
+    # Amazon Jeff: 25 33; Denmark Copenhagen: 26
+    target_layer = 26
     chosen_hidden_states = hidden_states[target_layer + 1][:, chosen_position, :]
     print(
         "Chosen hidden states:",
         target_layer,
-        chosen_position,
+        chosen_position, tokenizer.decode(chosen_token_id, skip_special_tokens=False),
         chosen_hidden_states.shape,
         chosen_hidden_states.mean().item(),
         chosen_hidden_states.std().item(),
@@ -113,8 +116,8 @@ def check_patchscopes():
     print()
 
     # Target prompt: few-shot identity mapping, as in the patchscopes notebook.
-    # prompt_target = "cat -> cat\n1135 -> 1135\nhello -> hello\n? ->"
-    prompt_target = f"Syria: Country in the Middle East\nLeonardo DiCaprio: American actor\nSamsung: South Korean multinational major appliance and consumer electronics corporation\n?"
+    prompt_target = "cat -> cat\n1135 -> 1135\nhello -> hello\n? ->"
+    # prompt_target = f"Syria: Country in the Middle East\nLeonardo DiCaprio: American actor\nSamsung: South Korean multinational major appliance and consumer electronics corporation\n?"
     # prompt_target = "?"
     inputs_target = tokenizer(prompt_target, return_tensors="pt").to(device)
     print("Target inputs:", len(inputs_target["input_ids"][0]))
@@ -160,7 +163,7 @@ def check_patchscopes():
     post_hook = get_post_hook(f"layer_{target_layer}{skip_ln_name}", position_x, chosen_hidden_states, generation_mode=True)
     layer_m = get_transformer_layers(model)[target_layer]
     handle = layer_m.register_forward_hook(post_hook)
-    N = 10
+    N = 10 if len(prompt_target) <= 3 else 1
 
     if N == 1:
         with torch.no_grad():

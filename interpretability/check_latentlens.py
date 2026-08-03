@@ -16,7 +16,8 @@ def load_model(model_name, dtype=torch.float32, device=None, trust_remote_code=T
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    load_kwargs = dict(trust_remote_code=trust_remote_code, dtype=dtype, attn_implementation="eager")
+    # load_kwargs = dict(trust_remote_code=trust_remote_code, dtype=dtype, attn_implementation="eager")
+    load_kwargs = dict(trust_remote_code=trust_remote_code, torch_dtype=dtype, attn_implementation="eager")
     try:
         model = AutoModelForCausalLM.from_pretrained(model_name, **load_kwargs)
     except (ValueError, KeyError, TypeError):
@@ -53,7 +54,8 @@ def check_latentlens():
         outputs = model(
             **inputs,
             output_hidden_states=True,
-            return_dict_in_generate=True,
+            # return_dict_in_generate=True,
+            return_dict=True,
         )
     hidden_states = outputs["hidden_states"]
     print("Hidden states:", len(hidden_states), hidden_states[0].shape)
@@ -66,7 +68,8 @@ def check_latentlens():
             do_sample=False,
             temperature=0.0,
             output_attentions=True,
-            return_dict_in_generate=True,
+            # return_dict_in_generate=True,
+            # return_dict=True,
         )
     image_token_id, visual_token_positions, visual_token_start_index, visual_token_end_index, sum_attention_over_visual_tokens, sum_attention_over_layers = compute_attention_over_visual_tokens(
         model, processor, inputs, generated_outputs, "Qwen2.5-VL-7B-Instruct", device)
