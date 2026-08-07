@@ -9,9 +9,12 @@ from benchmark.ViLP_captioning import ViLP_captioning
 from llm.Qwen import Qwen
 from lvlm.InternVL import InternVL
 from lvlm.LLaVA import LLaVA
+from lvlm.LLaVAMed1F import LLaVAMed1F
 from lvlm.LLaVANeXT import LLaVANeXT
 from lvlm.Qwen2VL import Qwen2VL
 from lvlm.Qwen2FVL import Qwen2FVL
+from lvlm.HuatuoGPTVision import HuatuoGPTVision
+from lvlm.Gemma3 import Gemma3
 
 BLACK_BOX_METHODS = [
     "vl_uncertainty",
@@ -22,10 +25,16 @@ METHODS = [
 ]
 
 LVLM_MAP = {
+    "gemma-3-4b-it": Gemma3,
+    "gemma-3-12b-it": Gemma3,
+    "gemma-3-27b-it": Gemma3,
+    "medgemma-4b-it": Gemma3,
+    "medgemma-1.5-4b-it": Gemma3,
     "Qwen2-VL-72B-Instruct": Qwen2VL,
     "Qwen2-VL-7B-Instruct": Qwen2VL,
     "Qwen2-VL-2B-Instruct": Qwen2VL,
     "Qwen2.5-VL-7B-Instruct": Qwen2FVL,
+    "HuatuoGPT-Vision-7B": HuatuoGPTVision,
     "InternVL2-26B": InternVL,
     "InternVL2-8B": InternVL,
     "InternVL2-1B": InternVL,
@@ -33,6 +42,7 @@ LVLM_MAP = {
     "llava-v1.6-mistral-7b-hf": LLaVANeXT,
     "llava-1.5-13b-hf": LLaVA,
     "llava-1.5-7b-hf": LLaVA,
+    "llava-med-v1.5-mistral-7b": LLaVAMed1F,
 }
 
 BENCHMARK_MAP = {

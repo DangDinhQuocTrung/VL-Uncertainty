@@ -166,7 +166,7 @@ def load_pretrained_model(
                     model_path, low_cpu_mem_usage=True, **kwargs
                 )
             elif "mistral" in model_name.lower():
-                tokenizer = AutoTokenizer.from_pretrained(model_path)
+                tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
                 model = LlavaMistralForCausalLM.from_pretrained(
                     model_path, low_cpu_mem_usage=True, **kwargs
                 )

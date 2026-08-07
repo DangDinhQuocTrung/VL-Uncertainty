@@ -17,10 +17,12 @@ def compute_entropy(outputs):
 
 
 def generate_with_masked_visual_tokens(model, inputs, top_k_visual_positions, model_type="llava"):
-    if "llava" in model_type:
+    if "llava" in model_type.lower():
         model_type = "llava"
-    elif "Qwen" in model_type:
+    elif "qwen" in model_type.lower():
         model_type = "qwen"
+    elif "gemma" in model_type.lower():
+        model_type = "gemma"
     else:
         raise ValueError(f"Unsupported model: {model_type}")
 
@@ -36,6 +38,8 @@ def generate_with_masked_visual_tokens(model, inputs, top_k_visual_positions, mo
         layer_0 = model.model.language_model.model.layers[0]
     elif model_type == "qwen":
         layer_0 = model.model.model.language_model.layers[0]
+    elif model_type == "gemma":
+        layer_0 = model.model.language_model.model.layers[0]
 
     # inputs["attention_mask"][0, top_k_visual_positions] = 0
     handle = layer_0.register_forward_pre_hook(pre_hook)
@@ -69,6 +73,10 @@ def generate_with_masked_visual_tokens(model, inputs, top_k_visual_positions, mo
             clean_up_tokenization_spaces=False,
         )
         final_answer = answer[0]
+    elif model_type == "gemma":
+        input_len = inputs["input_ids"].shape[-1]
+        trimmed_ids = outputs["sequences"][0][input_len:]
+        final_answer = model.processor.decode(trimmed_ids, skip_special_tokens=True).strip()
 
     return final_answer, outputs
 

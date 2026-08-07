@@ -2,63 +2,54 @@ import os
 import warnings
 
 import torch
-from qwen_vl_utils import process_vision_info
-from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration, BitsAndBytesConfig, GenerationConfig
-
-from custom_llava.conversation import conv_templates, SeparatorStyle
-from utils.text_constants import DEFAULT_IMAGE_TOKEN
+from PIL import Image
+from transformers import (
+    AutoProcessor,
+    BitsAndBytesConfig,
+    Gemma3ForConditionalGeneration,
+    GenerationConfig,
+)
 
 warnings.filterwarnings("ignore")
 
 
-def make_prompt(context, question):
-    question = DEFAULT_IMAGE_TOKEN + "\n" + question
-    conv = conv_templates["llava_v1"].copy()
-    conv.append_message(conv.roles[0], question)
-    conv.append_message(conv.roles[1], None)
-    prompt = conv.get_prompt()
-    stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
-    return prompt
-
-
-class Qwen2FVL:
+class Gemma3:
 
     def __init__(self, version, use_fastest=False, use_flash_attention=True):
         self.version = version
         self.use_fastest = use_fastest
         self.use_flash_attention = use_flash_attention
-        self.use_flash_attention = False
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.build_model()
 
     def _model_id(self):
         if "/" in self.version:
             return self.version
-        return f"Qwen/{self.version}"
+        return f"google/{self.version}"
 
     def build_model(self):
         model_name = self._model_id()
+        attn_implementation = "flash_attention_2" if self.use_flash_attention else "eager"
         if self.use_fastest:
             quantization_config = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_compute_dtype=torch.bfloat16,
                 bnb_4bit_use_double_quant=True,
                 bnb_4bit_quant_type="nf4",
-                # load_in_8bit=True,
             )
-            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            self.model = Gemma3ForConditionalGeneration.from_pretrained(
                 model_name,
                 quantization_config=quantization_config,
                 low_cpu_mem_usage=True,
-                attn_implementation="flash_attention_2" if self.use_flash_attention else "eager",
+                attn_implementation=attn_implementation,
                 device_map="auto",
             )
         else:
-            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            self.model = Gemma3ForConditionalGeneration.from_pretrained(
                 model_name,
                 torch_dtype=torch.bfloat16,
-                # Use sdpa for matching the results of previous flash_attention_2
-                attn_implementation="flash_attention_2" if self.use_flash_attention else "eager",
+                low_cpu_mem_usage=True,
+                attn_implementation=attn_implementation,
                 device_map="auto",
             )
         self.model.eval()
@@ -71,45 +62,49 @@ class Qwen2FVL:
         head_weights_path = f"{self.weight_dir}/{self.version}_head_weights.pth"
         attention_weights_path = f"{self.weight_dir}/{self.version}_attention_weights.pth"
         if (not os.path.exists(head_weights_path)) or (not os.path.exists(attention_weights_path)):
-            head_weight = self.model.lm_head.weight
-            print(self.model.lm_head)
+            head_weight = self.model.language_model.lm_head.weight
+            print(self.model.language_model.lm_head)
             head_weight_cpu = head_weight.cpu()
             torch.save(head_weight_cpu, head_weights_path)
-            # attention_weight = self.model.model.language_model.layers[0].mlp.down_proj.weight
-            attention_weight = self.model.model.layers[0].mlp.down_proj.weight
-            print(self.model.model.layers[0].mlp.down_proj)
-            # attention_weight = attention_weight.view(1792, 18944)
+            attention_weight = self.model.language_model.model.layers[0].mlp.down_proj.weight
+            print(self.model.language_model.model.layers[0].mlp.down_proj)
             attention_weight_cpu = attention_weight.cpu()
             torch.save(attention_weight_cpu, attention_weights_path)
         return
 
-    def _get_temp(self, temp):
-        return temp
-
-    def generate(self, image, question, temp, return_more=False, return_mode=0):
-        prompt = question
-        # prompt = make_prompt(None, question)
+    def _prepare_inputs(self, image, question):
+        if isinstance(image, str):
+            image = Image.open(image).convert("RGB")
 
         messages = [
             {
                 "role": "user",
                 "content": [
                     {"type": "image", "image": image},
-                    {"type": "text", "text": prompt},
+                    {"type": "text", "text": question},
                 ],
             }
         ]
-        text = self.processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        image_inputs, video_inputs = process_vision_info(messages)
-        inputs = self.processor(
-            text=[text],
-            images=image_inputs,
-            videos=video_inputs,
-            padding=True,
+        inputs = self.processor.apply_chat_template(
+            messages,
+            add_generation_prompt=True,
+            tokenize=True,
+            return_dict=True,
             return_tensors="pt",
-        ).to(self.device)
+        )
+        inputs = inputs.to(self.model.device)
+        for key, value in inputs.items():
+            if isinstance(value, torch.Tensor) and value.is_floating_point():
+                inputs[key] = value.to(torch.bfloat16)
+        return inputs
+
+    def _decode_answer(self, inputs, generated_ids):
+        input_len = inputs["input_ids"].shape[-1]
+        trimmed_ids = generated_ids[0][input_len:]
+        return self.processor.decode(trimmed_ids, skip_special_tokens=True).strip()
+
+    def generate(self, image, question, temp, return_more=False, return_mode=0):
+        inputs = self._prepare_inputs(image, question)
 
         # Hooking
         down_proj_features = []
@@ -125,9 +120,8 @@ class Qwen2FVL:
             llm_head_features.append(last_token_hidden)
 
         # EUQ hook
-        # down_proj_handle = self.model.model.language_model.layers[0].mlp.down_proj.register_forward_hook(down_proj_hook)
-        down_proj_handle = self.model.model.layers[0].mlp.down_proj.register_forward_hook(down_proj_hook)
-        lm_head_handle = self.model.lm_head.register_forward_hook(lm_head_hook)
+        down_proj_handle = self.model.language_model.model.layers[0].mlp.down_proj.register_forward_hook(down_proj_hook)
+        lm_head_handle = self.model.language_model.lm_head.register_forward_hook(lm_head_hook)
 
         # Generation
         outputs = self.model.generate(
@@ -139,23 +133,14 @@ class Qwen2FVL:
             return_dict_in_generate=return_more,
             generation_config=GenerationConfig(
                 do_sample=temp > 0.0,
-                temperature=self._get_temp(temp),
+                temperature=max(temp, 0.01),
                 repetition_penalty=1.05,
                 top_k=50,
                 top_p=0.95,
             )
         )
         generated_ids = outputs["sequences"] if return_more else outputs
-        generated_ids_trimmed = [
-            out_ids[len(in_ids) :]
-            for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-        ]
-        answer = self.processor.batch_decode(
-            generated_ids_trimmed,
-            skip_special_tokens=True,
-            clean_up_tokenization_spaces=False,
-        )
-        answer = answer[0]
+        answer = self._decode_answer(inputs, generated_ids)
 
         # Post-processing
         down_proj_features = [x[:, -1:, :].cpu() for x in down_proj_features]
