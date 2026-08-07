@@ -7,26 +7,6 @@ from interpretability.scopes_lens_utils import load_model, get_num_layers, get_t
 MODEL_NAME = "google/gemma-3-12b-it"
 
 
-def load_model(model_name, dtype=torch.bfloat16, device=None, trust_remote_code=True):
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    else:
-        device = torch.device(device)
-
-    tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=trust_remote_code)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        trust_remote_code=trust_remote_code,
-        torch_dtype=dtype,
-        attn_implementation="eager",
-    )
-    model = model.to(device).eval()
-    return model, tokenizer
-
-
 def get_transformer_layers(model):
     if hasattr(model, "language_model") and hasattr(model.language_model, "model"):
         return model.language_model.model.layers

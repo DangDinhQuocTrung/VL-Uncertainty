@@ -72,6 +72,7 @@ class EvidenceModel:
         w_pos1_copy = self.w_pos1.clone()
         w_pos1_copy[w_pos1_copy == 0] = second_smallest
         self.w_pos2 = w_pos1_copy
+
         # Handle zeros in w_neg
         sorted_w_neg = torch.sort(self.w_neg1.flatten())[0]
         # second_smallest = sorted_w_neg[torch.nonzero(sorted_w_neg > 0, as_tuple=True)[0][0]]
