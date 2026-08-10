@@ -30,11 +30,11 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--quick_benchmark", type=lambda x: x.lower() == "true", default="True")
     parser.add_argument("--use_fastest", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--lvlm", type=str, default="HuatuoGPT-Vision-7B")
+    parser.add_argument("--lvlm", type=str, default="medgemma-1.5-4b-it")
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--benchmark", type=str, default="ViLP")
+    parser.add_argument("--benchmark", type=str, default="GMAIMMBench")
     parser.add_argument("--llm", type=str, default="Qwen2.5-3B-Instruct")
-    parser.add_argument("--uncertainty", type=str, default="euq")
+    parser.add_argument("--uncertainty", type=str, default="vauq")
     parser.add_argument("--uncertainty_threshold", type=float, default=1.0)
 
     # Perturbation-specific arguments

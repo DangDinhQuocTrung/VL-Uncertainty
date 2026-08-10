@@ -5,6 +5,11 @@ from benchmark.ScienceQA import ScienceQA
 from benchmark.ViLP import ViLP
 from benchmark.MisbehaviorBench import MisbehaviorBench
 from benchmark.ViLP_captioning import ViLP_captioning
+from benchmark.VQARAD import VQARAD
+from benchmark.PathVQA import PathVQA
+from benchmark.SLAKE import SLAKE
+from benchmark.MedVIGIL import MedVIGIL
+from benchmark.GMAIMMBench import GMAIMMBench
 
 from llm.Qwen import Qwen
 from lvlm.InternVL import InternVL
@@ -53,6 +58,11 @@ BENCHMARK_MAP = {
     "ViLP": ViLP,
     "MisbehaviorBench": MisbehaviorBench,
     "ViLP_captioning": ViLP_captioning,
+    "VQARAD": VQARAD,
+    "PathVQA": PathVQA,
+    "SLAKE": SLAKE,
+    "MedVIGIL": MedVIGIL,
+    "GMAIMMBench": GMAIMMBench,
 }
 
 LLM_MAP = {
@@ -70,4 +80,9 @@ BENCHMARK_TYPE = {
     "ViLP": "FREE_FORM",
     "MisbehaviorBench": "FREE_FORM",
     "ViLP_captioning": "FREE_FORM",
+    "VQARAD": "FREE_FORM",
+    "PathVQA": "FREE_FORM",
+    "SLAKE": "FREE_FORM",
+    "MedVIGIL": "MULTI_CHOICE",
+    "GMAIMMBench": "MULTI_CHOICE",
 }

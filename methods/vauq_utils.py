@@ -2,16 +2,18 @@ import torch
 
 
 def compute_attention_over_visual_tokens(model, processor, inputs, outputs, lvlm_type, device=None):
-    layer_range = [10, 25] if lvlm_type == "llava" else [20, 40]
     if device is None:
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     if "llava" in lvlm_type:
         image_token_id = model.config.image_token_index
+        layer_range = [10, 25]
     elif "Qwen" in lvlm_type:
         image_token_id = processor.tokenizer.convert_tokens_to_ids("<|image_pad|>")
+        layer_range = [20, 40]
     elif "gemma" in lvlm_type:
         image_token_id = processor.tokenizer.convert_tokens_to_ids("<image_soft_token>")
+        layer_range = [20, 33]
     else:
         raise ValueError(f"Unsupported model: {lvlm_type}")
 
