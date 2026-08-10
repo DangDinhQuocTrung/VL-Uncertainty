@@ -20,6 +20,9 @@ from lvlm.model_manager import LLaVAModelManager
 from methods.svar.svar import estimate_uncertainty_by_svar
 from methods.euq.euq import estimate_uncertainty_by_euq
 from methods.vauq import estimate_uncertainty_by_vauq
+from methods.nll import estimate_uncertainty_by_nll
+from methods.pro import estimate_uncertainty_by_pro
+from methods.rds import estimate_uncertainty_by_rds
 from utils.metrics import compute_f1_score
 
 warnings.filterwarnings("ignore")
@@ -34,8 +37,50 @@ def parse_args():
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--benchmark", type=str, default="GMAIMMBench")
     parser.add_argument("--llm", type=str, default="Qwen2.5-3B-Instruct")
-    parser.add_argument("--uncertainty", type=str, default="vauq")
+    parser.add_argument("--uncertainty", type=str, default="rds")
     parser.add_argument("--uncertainty_threshold", type=float, default=1.0)
+    parser.add_argument(
+        "--nll_mode",
+        type=str,
+        default="avg",
+        choices=["avg", "average", "max"],
+        help="Aggregation mode for NLL uncertainty: avg/average or max.",
+    )
+    parser.add_argument(
+        "--num_beams",
+        type=int,
+        default=5,
+        help="Beam width for PRO; also default N samples for RDS if --sampling_time is 0.",
+    )
+    parser.add_argument(
+        "--pro_alpha",
+        type=float,
+        default=0.4,
+        help="Probability threshold alpha for adaptive top-K selection in PRO.",
+    )
+    parser.add_argument(
+        "--diversity_penalty",
+        type=float,
+        default=0.0,
+        help=(
+            "Diversity penalty for group/diverse beam search. Keep 0.0 (standard beam "
+            "search) for bf16 models: diverse beams + output_scores hits a Transformers "
+            "dtype bug. Set >0 only if you need paper-style diverse beams."
+        ),
+    )
+    parser.add_argument(
+        "--rds_mode",
+        type=str,
+        default="weighted",
+        choices=["eigenembed", "base", "weighted"],
+        help="RDS scoring mode: eigenembed, base (RDS), or weighted (RDSw).",
+    )
+    parser.add_argument(
+        "--rds_embed_model",
+        type=str,
+        default="all-MiniLM-L6-v2",
+        help="SentenceTransformer model used to embed answers for RDS.",
+    )
 
     # Perturbation-specific arguments
     parser.add_argument("--visual_perturbation", type=str, default="blurring")
@@ -58,8 +103,18 @@ def parse_args():
 
     # Sampling-specific arguments
     parser.add_argument("--inference_temp", type=float, default=0.0)
-    parser.add_argument("--sampling_temp", type=float, default=0.0)
-    parser.add_argument("--sampling_time", type=int, default=0)
+    parser.add_argument(
+        "--sampling_temp",
+        type=float,
+        default=0.0,
+        help="Sampling temperature. For RDS, 0 defaults to 1.0 (paper-style multinomial sampling).",
+    )
+    parser.add_argument(
+        "--sampling_time",
+        type=int,
+        default=0,
+        help="Number of samples. For RDS, 0 defaults to --num_beams.",
+    )
     args = parser.parse_args()
     print(vars(args))
     return args
@@ -128,6 +183,12 @@ def handle_single(args, idx, lvlm, benchmark, llm, log_dict):
         estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict)
     elif args.uncertainty == "vauq":
         estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict)
+    elif args.uncertainty == "nll":
+        estimate_uncertainty_by_nll(args, lvlm, sample, llm, log_dict)
+    elif args.uncertainty == "pro":
+        estimate_uncertainty_by_pro(args, lvlm, sample, llm, log_dict)
+    elif args.uncertainty == "rds":
+        estimate_uncertainty_by_rds(args, lvlm, sample, llm, log_dict)
     else:
         raise ValueError(f"Unsupported method: {args.uncertainty}")
     return

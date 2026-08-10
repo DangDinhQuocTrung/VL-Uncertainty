@@ -7,6 +7,7 @@ from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration, Bits
 
 from custom_llava.conversation import conv_templates, SeparatorStyle
 from utils.text_constants import DEFAULT_IMAGE_TOKEN
+from lvlm.generation_utils import build_generation_kwargs
 
 warnings.filterwarnings("ignore")
 
@@ -86,7 +87,19 @@ class Qwen2FVL:
     def _get_temp(self, temp):
         return temp
 
-    def generate(self, image, question, temp, return_more=False, return_mode=0):
+    def generate(
+        self,
+        image,
+        question,
+        temp,
+        return_more=False,
+        return_mode=0,
+        num_beams=1,
+        num_return_sequences=None,
+        num_beam_groups=1,
+        diversity_penalty=0.0,
+        length_penalty=1.0,
+    ):
         prompt = question
         # prompt = make_prompt(None, question)
 
@@ -110,69 +123,67 @@ class Qwen2FVL:
             padding=True,
             return_tensors="pt",
         ).to(self.device)
+        use_euq_hooks = return_more and return_mode == 0
 
-        # Hooking
         down_proj_features = []
         llm_head_features = []
+        down_proj_handle = None
+        lm_head_handle = None
 
-        def down_proj_hook(module, inputs, outputs):
-            intermediate = inputs[0]
-            down_proj_features.append(intermediate.detach().cpu())
+        if use_euq_hooks:
+            def down_proj_hook(module, inputs_, outputs):
+                intermediate = inputs_[0]
+                down_proj_features.append(intermediate.detach().cpu())
 
-        def lm_head_hook(module, inputs, outputs):
-            full_hidden = inputs[0].detach().cpu()
-            last_token_hidden = full_hidden[:, -1, :]
-            llm_head_features.append(last_token_hidden)
+            def lm_head_hook(module, inputs_, outputs):
+                full_hidden = inputs_[0].detach().cpu()
+                last_token_hidden = full_hidden[:, -1, :]
+                llm_head_features.append(last_token_hidden)
 
-        # EUQ hook
-        # down_proj_handle = self.model.model.language_model.layers[0].mlp.down_proj.register_forward_hook(down_proj_hook)
-        down_proj_handle = self.model.model.layers[0].mlp.down_proj.register_forward_hook(down_proj_hook)
-        lm_head_handle = self.model.lm_head.register_forward_hook(lm_head_hook)
+            down_proj_handle = self.model.model.layers[0].mlp.down_proj.register_forward_hook(down_proj_hook)
+            lm_head_handle = self.model.lm_head.register_forward_hook(lm_head_hook)
 
-        # Generation
+        gen_kwargs = build_generation_kwargs(
+            temp,
+            num_beams=num_beams,
+            num_return_sequences=num_return_sequences,
+            num_beam_groups=num_beam_groups,
+            diversity_penalty=diversity_penalty,
+            length_penalty=length_penalty,
+        )
         outputs = self.model.generate(
             **inputs,
             max_new_tokens=64,
             output_scores=return_more,
-            output_attentions=return_more,
-            output_hidden_states=return_more,
+            output_attentions=return_more and return_mode == 1,
+            output_hidden_states=return_more and return_mode == 1,
             return_dict_in_generate=return_more,
-            generation_config=GenerationConfig(
-                do_sample=temp > 0.0,
-                temperature=self._get_temp(temp),
-                repetition_penalty=1.05,
-                top_k=50,
-                top_p=0.95,
-            )
+            generation_config=GenerationConfig(**gen_kwargs),
         )
         generated_ids = outputs["sequences"] if return_more else outputs
-        generated_ids_trimmed = [
-            out_ids[len(in_ids) :]
-            for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-        ]
-        answer = self.processor.batch_decode(
+        prompt_len = inputs.input_ids.shape[-1]
+        generated_ids_trimmed = [out_ids[prompt_len:] for out_ids in generated_ids]
+        answers = self.processor.batch_decode(
             generated_ids_trimmed,
             skip_special_tokens=True,
             clean_up_tokenization_spaces=False,
         )
-        answer = answer[0]
+        answer = answers[0]
 
-        # Post-processing
-        down_proj_features = [x[:, -1:, :].cpu() for x in down_proj_features]
-        llm_head_feature_temp = []
-        for head_inputs in llm_head_features:
-            if(head_inputs.dim() == 3):
-                head_inputs = head_inputs.unsqueeze(0)
-            llm_head_feature_temp.append(head_inputs.cpu())
-        llm_head_features = llm_head_feature_temp
-
-        # Remove temporary variables
-        down_proj_handle.remove()
-        lm_head_handle.remove()
-        del llm_head_feature_temp
+        if use_euq_hooks:
+            down_proj_features = [x[:, -1:, :].cpu() for x in down_proj_features]
+            llm_head_feature_temp = []
+            for head_inputs in llm_head_features:
+                if head_inputs.dim() == 3:
+                    head_inputs = head_inputs.unsqueeze(0)
+                llm_head_feature_temp.append(head_inputs.cpu())
+            llm_head_features = llm_head_feature_temp
+            down_proj_handle.remove()
+            lm_head_handle.remove()
+            del llm_head_feature_temp
 
         if return_more and return_mode == 0:
             return answer, down_proj_features, llm_head_features
         elif return_more and return_mode == 1:
-            return answer, inputs, outputs
+            return answer, inputs, outputs, answers
         return answer

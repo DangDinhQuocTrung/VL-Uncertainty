@@ -87,7 +87,7 @@ def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
     device = lvlm.device
 
     # Generate answer
-    answer, inputs, outputs = lvlm.generate(
+    answer, inputs, outputs, _answers = lvlm.generate(
         sample["img"],
         sample["question"],
         args.inference_temp,
