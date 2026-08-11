@@ -30,10 +30,9 @@ mkdir -p ${ROOT_DIR}/uncertainty/logs
 
 # Load
 pwd
-nvidia-smi
 module load cuda/12.1
 module load python3/3.11.9
-source /zhome/05/8/227717/venv/medical/bin/activate
+source /zhome/05/8/227717/venv/health/bin/activate
 # Export
 export PYTHONPATH=${PYTHONPATH}:${USER_DIR}/VL-Uncertainty
 export HF_HOME=${ROOT_DIR}/cache
