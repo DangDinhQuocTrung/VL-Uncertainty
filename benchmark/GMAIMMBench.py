@@ -19,8 +19,8 @@ class GMAIMMBench:
             "Endoscopy", "Microscopy", "Histopathology",
             "Fundus Photography", "Dermoscopy",
         ]
-        # self.num_questions_per_modality = 200
-        self.num_questions_per_modality = 1
+        self.num_questions_per_modality = 100
+        # self.num_questions_per_modality = 2
         tsv_path = Path(
             hf_hub_download(
                 repo_id="OpenGVLab/GMAI-MMBench",
@@ -76,14 +76,16 @@ class GMAIMMBench:
             if pd.isna(choice) or not str(choice).strip():
                 continue
             choices += f"({i}): {str(choice).strip()}\n"
-            choice_numbers += f"{i}, "
+            choice_numbers += f"({i}), "
             num_c += 1
         choice_numbers = choice_numbers[:-2]
         question += choices
         question += "\n"
         question += (
-            f"This is a single choice question, answer only one word with choice number "
-            f"in {choice_numbers}."
+            f"This is a single choice question. Answer only one word with a choice number.\n"
+            f"You answer must be of the format: Answer: (<choice number>).\n"
+            f"Your answer must be one of: {choice_numbers}.\n"
+            f"Example: Answer: (1)."
         )
 
         answer = str(row["answer"]).strip().upper()

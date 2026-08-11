@@ -2,14 +2,17 @@ import os
 import torch
 import gc
 from pathlib import Path
-from utils.constants import BENCHMARK_TYPE
+from utils.constants import is_choice_question
 from methods.euq.evidence import EvidenceModel
 from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
 
 
 def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
     index = sample["idx"]
-    device = llm.model.device
+    if getattr(llm, "model", None) is not None and hasattr(llm.model, "device"):
+        device = llm.model.device
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     weight_dir = Path(lvlm.weight_dir) if lvlm is not None else Path(log_dict["weight_dir"])
     lvlm_version = lvlm.version if lvlm is not None else log_dict["lvlm_version"]
     feature_weight_dir = weight_dir / "features"
@@ -27,7 +30,7 @@ def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
         )
         log_dict[sample["idx"]]["answer"] = answer
         flag_answer_correct = True
-        if BENCHMARK_TYPE[args.benchmark] == "MULTI_CHOICE":
+        if is_choice_question(args, sample):
             flag_answer_correct = str(sample["gt_answer"]) in answer
         else:
             flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(llm, sample, answer)

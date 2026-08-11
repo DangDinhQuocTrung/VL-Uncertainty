@@ -7,7 +7,7 @@ from utils.misc import *
 from utils.textual_perturbation import *
 from utils.visual_perturbation import *
 from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
-from utils.constants import BENCHMARK_TYPE
+from utils.constants import is_choice_question
 
 
 def perturbation_of_visual_prompt(args, sample):
@@ -174,7 +174,7 @@ def infer_single_sample(args, lvlm, sample, is_sampling, llm, log_dict):
     if not is_sampling:
         log_dict[sample["idx"]]["answer"] = answer
         flag_answer_correct = True
-        if BENCHMARK_TYPE[args.benchmark] == "MULTI_CHOICE":
+        if is_choice_question(args, sample):
             flag_answer_correct = str(sample["gt_answer"]) in answer
         else:
             flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(llm, sample, answer)
@@ -188,7 +188,7 @@ def infer_single_sample(args, lvlm, sample, is_sampling, llm, log_dict):
 def uncertainty_estimation(args, sample, llm, log_dict):
     answer_sampling_list = log_dict[sample["idx"]]["answer_sampling_list"]
     answer_cluster_idx = []
-    if BENCHMARK_TYPE[args.benchmark] == "MULTI_CHOICE":
+    if is_choice_question(args, sample):
         for answer in answer_sampling_list:
             if (
                 re.search(r"\d+", answer) is None

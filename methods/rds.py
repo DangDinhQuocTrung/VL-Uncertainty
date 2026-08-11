@@ -15,7 +15,7 @@ import torch.nn.functional as F
 
 from methods.beam_utils import generate_temperature_samples
 from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
-from utils.constants import BENCHMARK_TYPE
+from utils.constants import is_choice_question
 
 _EMBED_MODEL = None
 
@@ -117,7 +117,7 @@ def estimate_uncertainty_by_rds(args, lvlm, sample, llm, log_dict):
     log_dict[sample["idx"]]["rds_sampling_temp"] = samples["sampling_temp"]
 
     flag_answer_correct = True
-    if BENCHMARK_TYPE[args.benchmark] == "MULTI_CHOICE":
+    if is_choice_question(args, sample):
         flag_answer_correct = str(sample["gt_answer"]) in answer
     else:
         flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(

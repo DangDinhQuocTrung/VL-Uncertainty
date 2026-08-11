@@ -2,7 +2,7 @@ import spacy
 from transformers.generation.logits_process import LogitsProcessorList, TopKLogitsWarper
 
 from methods.svar.utils import *
-from utils.constants import BENCHMARK_TYPE
+from utils.constants import is_choice_question
 from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
 
 
@@ -16,7 +16,7 @@ def estimate_uncertainty_by_svar(args, model_manager, sample, llm, log_dict):
     )
     log_dict[sample["idx"]]["answer"] = answer
     flag_answer_correct = True
-    if BENCHMARK_TYPE[args.benchmark] == "MULTI_CHOICE":
+    if is_choice_question(args, sample):
         flag_answer_correct = str(sample["gt_answer"]) in answer
     else:
         flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(llm, sample, answer)

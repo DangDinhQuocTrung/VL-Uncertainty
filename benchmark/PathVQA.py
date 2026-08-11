@@ -11,7 +11,11 @@ class PathVQA:
 
     def retrieve(self, idx):
         row = self.ds["test"][idx]
-        question = f"{row['question']}\nNOTE: Please give a concise answer within five words. Please use only one word to answer if possible."
+        question = f"{row['question']}\n"
+        question += (
+            "NOTE: Please give a concise answer within five words.\n"
+            "Please use only one word to answer if possible."
+        )
         result = {
             "idx": idx,
             "img": row["image"],

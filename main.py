@@ -31,18 +31,23 @@ warnings.filterwarnings("ignore")
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--quick_benchmark", type=lambda x: x.lower() == "true", default="True")
+    parser.add_argument("--quick_benchmark", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--use_fastest", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--lvlm", type=str, default="medgemma-1.5-4b-it")
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--benchmark", type=str, default="GMAIMMBench")
-    parser.add_argument("--llm", type=str, default="Qwen2.5-3B-Instruct")
-    parser.add_argument("--uncertainty", type=str, default="rds")
+    parser.add_argument("--benchmark", type=str, default="MedVIGIL")
+    parser.add_argument(
+        "--llm",
+        type=str,
+        default="Qwen2.5-3B-Instruct",
+        help="Judge LLM name in LLM_MAP, e.g. Qwen2.5-3B-Instruct or claude-sonnet-5.",
+    )
+    parser.add_argument("--uncertainty", type=str, default="vauq")
     parser.add_argument("--uncertainty_threshold", type=float, default=1.0)
     parser.add_argument(
         "--nll_mode",
         type=str,
-        default="avg",
+        default="max",
         choices=["avg", "average", "max"],
         help="Aggregation mode for NLL uncertainty: avg/average or max.",
     )
@@ -149,6 +154,10 @@ def obtain_single_sample(args, benchmark, idx, log_dict):
     sample = benchmark.retrieve(idx)
     log_dict[idx]["question"] = sample["question"]
     log_dict[idx]["gt_answer"] = sample["gt_answer"]
+    if "flag_perturbed_inputs" in sample:
+        log_dict[idx]["flag_perturbed_inputs"] = sample["flag_perturbed_inputs"]
+    if "is_closed" in sample:
+        log_dict[idx]["is_closed"] = sample["is_closed"]
     return sample
 
 
@@ -205,6 +214,10 @@ def handle_batch(args, lvlm, benchmark, llm):
     cnt_correct_detection = 0
     uncertainty_scores = []
     correctness_gt = []
+    is_perturbation_detection = args.benchmark in PERTURBATION_DETECTION_DATASETS
+    detection_label = (
+        "Perturbation detection" if is_perturbation_detection else "Hallucination detection"
+    )
     benchmark_size = benchmark.obtain_size()
     print(f"Benchmark size: {benchmark_size}")
     if args.quick_benchmark:
@@ -223,11 +236,20 @@ def handle_batch(args, lvlm, benchmark, llm):
             cnt_correct_base += 1
         if split_inference_quantification:
             continue
+        if is_perturbation_detection:
+            flag_detection_correct = (
+                bool(log_dict[idx]["flag_perturbed_inputs"])
+                == bool(log_dict[idx]["flag_predict_hallucination"])
+            )
+            log_dict[idx]["flag_detection_correct"] = flag_detection_correct
         if log_dict[idx]["flag_detection_correct"]:
             cnt_correct_detection += 1
         total += 1
         uncertainty_scores.append(log_dict[idx]["uncertainty"])
-        correctness_gt.append(log_dict[idx]["flag_answer_correct"])
+        if is_perturbation_detection:
+            correctness_gt.append(log_dict[idx]["flag_perturbed_inputs"])
+        else:
+            correctness_gt.append(log_dict[idx]["flag_answer_correct"])
     # Run again after removing the LVLM
     args.split_inference_quantification = 2
     if split_inference_quantification:
@@ -241,33 +263,42 @@ def handle_batch(args, lvlm, benchmark, llm):
             handle_single(args, idx, lvlm, benchmark, llm, log_dict)
             if not log_dict[idx]["flag_sample_valid"]:
                 continue
+            if is_perturbation_detection:
+                flag_detection_correct = (
+                    bool(log_dict[idx]["flag_perturbed_inputs"])
+                    == bool(log_dict[idx]["flag_predict_hallucination"])
+                )
+                log_dict[idx]["flag_detection_correct"] = flag_detection_correct
             if log_dict[idx]["flag_detection_correct"]:
                 cnt_correct_detection += 1
             total += 1
             uncertainty_scores.append(log_dict[idx]["uncertainty"])
-            correctness_gt.append(log_dict[idx]["flag_answer_correct"])
+            if is_perturbation_detection:
+                correctness_gt.append(log_dict[idx]["flag_perturbed_inputs"])
+            else:
+                correctness_gt.append(log_dict[idx]["flag_answer_correct"])
 
     # Compute metrics
     uncertainty_scores = torch.tensor(uncertainty_scores)
     correctness_gt = torch.tensor(correctness_gt, dtype=torch.int)
-    incorrectness_gt = 1 - correctness_gt
-    auroc_score = auroc(uncertainty_scores, incorrectness_gt, task="binary").item()
-    f1_score_result, best_threshold = compute_f1_score(uncertainty_scores, incorrectness_gt, seeking=True)
+    detection_gt = correctness_gt if is_perturbation_detection else (1 - correctness_gt)
+    auroc_score = auroc(uncertainty_scores, detection_gt, task="binary").item()
+    f1_score_result, best_threshold = compute_f1_score(uncertainty_scores, detection_gt, seeking=True)
     threshold = best_threshold if best_threshold is not None else args.uncertainty_threshold
     thresholded_uncertainty_scores = (uncertainty_scores >= threshold).float()
-    precision_score = precision(thresholded_uncertainty_scores, incorrectness_gt, task="binary").item()
-    recall_score = recall(thresholded_uncertainty_scores, incorrectness_gt, task="binary").item()
-    accuracy_score = accuracy(thresholded_uncertainty_scores, incorrectness_gt, task="binary").item()
+    precision_score = precision(thresholded_uncertainty_scores, detection_gt, task="binary").item()
+    recall_score = recall(thresholded_uncertainty_scores, detection_gt, task="binary").item()
+    accuracy_score = accuracy(thresholded_uncertainty_scores, detection_gt, task="binary").item()
 
     # Log metrics
     log_dict["Base task Accuracy"] = (cnt_correct_base / total)
-    log_dict["Hallucination detection Accuracy"] = (cnt_correct_detection / total)
-    log_dict["Hallucination detection AUROC"] = auroc_score
-    log_dict["Hallucination detection F1_Score"] = f1_score_result
-    log_dict["Hallucination detection Found Threshold"] = threshold
-    log_dict["Hallucination detection Precision"] = precision_score
-    log_dict["Hallucination detection Recall"] = recall_score
-    log_dict["Hallucination detection Found Accuracy"] = accuracy_score
+    log_dict[f"{detection_label} Accuracy"] = (cnt_correct_detection / total)
+    log_dict[f"{detection_label} AUROC"] = auroc_score
+    log_dict[f"{detection_label} F1_Score"] = f1_score_result
+    log_dict[f"{detection_label} Found Threshold"] = threshold
+    log_dict[f"{detection_label} Precision"] = precision_score
+    log_dict[f"{detection_label} Recall"] = recall_score
+    log_dict[f"{detection_label} Found Accuracy"] = accuracy_score
     log_dict["Total samples"] = total
     end_time_str = get_cur_time()
     log_dict["end_time_str"] = end_time_str

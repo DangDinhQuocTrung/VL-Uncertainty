@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
-from utils.constants import BENCHMARK_TYPE
+from utils.constants import is_choice_question
 from methods.vauq_utils import compute_attention_over_visual_tokens
 
 
@@ -96,7 +96,7 @@ def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
     )
     log_dict[sample["idx"]]["answer"] = answer
     flag_answer_correct = True
-    if BENCHMARK_TYPE[args.benchmark] == "MULTI_CHOICE":
+    if is_choice_question(args, sample):
         flag_answer_correct = str(sample["gt_answer"]) in answer
     else:
         flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(llm, sample, answer)

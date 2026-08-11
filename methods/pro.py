@@ -4,7 +4,7 @@ import numpy as np
 
 from methods.beam_utils import generate_beam_candidates
 from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
-from utils.constants import BENCHMARK_TYPE
+from utils.constants import is_choice_question
 
 
 def compute_pro_score(probs, alpha=0.4):
@@ -40,7 +40,7 @@ def estimate_uncertainty_by_pro(args, lvlm, sample, llm, log_dict):
     log_dict[sample["idx"]]["beam_probs"] = beam["probs"]
 
     flag_answer_correct = True
-    if BENCHMARK_TYPE[args.benchmark] == "MULTI_CHOICE":
+    if is_choice_question(args, sample):
         flag_answer_correct = str(sample["gt_answer"]) in answer
     else:
         flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(

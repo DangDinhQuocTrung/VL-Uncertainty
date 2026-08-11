@@ -20,6 +20,8 @@ class MedVIGIL:
             )
         )
         self.ds = pd.read_csv(self.root_dir / "probes_mcq.csv")
+        self.max_dataset_size = 1000
+        self.ds = self.ds.head(self.max_dataset_size)
 
     def obtain_size(self):
         return len(self.ds)
@@ -55,12 +57,24 @@ class MedVIGIL:
         question += choices
         question += "\n"
         question += (
-            f"This is a single choice question, answer only one word with choice number "
-            f"in {choice_numbers}."
+            f"This is a single choice question. Answer only one word with a choice number.\n"
+            f"You answer must be of the format: Answer: (<choice number>).\n"
+            f"Your answer must be one of: {choice_numbers}.\n"
+            f"Example: Answer: (1)."
         )
 
         correct_letter = str(row["correct_letter"]).strip().upper()
         gt_answer = "ABCDE".index(correct_letter)
+
+        probe_kind_raw = row["probe_kind"] if "probe_kind" in row.index else ""
+        probe_kind = (
+            "" if pd.isna(probe_kind_raw) else str(probe_kind_raw).strip().lower()
+        )
+        image_file_raw = row["image_file"]
+        image_file = "" if pd.isna(image_file_raw) else str(image_file_raw).strip()
+        flag_perturbed_inputs = (
+            bool(probe_kind) and probe_kind != "original"
+        ) or image_file.startswith("images_perturbed/")
 
         result = {
             "idx": idx,
@@ -68,6 +82,7 @@ class MedVIGIL:
             "question": question,
             "gt_answer": str(gt_answer),
             "num_c": num_c,
+            "flag_perturbed_inputs": flag_perturbed_inputs,
         }
         return result
 
