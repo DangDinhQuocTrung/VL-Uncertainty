@@ -19,6 +19,7 @@ class GMAIMMBench:
             "Endoscopy", "Microscopy", "Histopathology",
             "Fundus Photography", "Dermoscopy",
         ]
+        # self.modalities = ["Histopathology"]
         self.num_questions_per_modality = 100
         # self.num_questions_per_modality = 2
         tsv_path = Path(
@@ -33,15 +34,24 @@ class GMAIMMBench:
         kept = {m: [] for m in self.modalities}
         counts = {m: 0 for m in self.modalities}
         all_modalities = set()
+        n_skipped_images = 0
         for chunk in pd.read_csv(tsv_path, sep="\t", chunksize=64):
             all_modalities.update(chunk["modality"].dropna().unique().tolist())
             for modality in self.modalities:
                 if counts[modality] >= self.num_questions_per_modality:
                     continue
                 need = self.num_questions_per_modality - counts[modality]
-                subset = chunk[chunk["modality"] == modality].head(need)
-                if len(subset) == 0:
+                safe_indices = []
+                for row_idx, row in chunk[chunk["modality"] == modality].iterrows():
+                    if self._is_safe_image(row.get("image")):
+                        safe_indices.append(row_idx)
+                        if len(safe_indices) >= need:
+                            break
+                    else:
+                        n_skipped_images += 1
+                if not safe_indices:
                     continue
+                subset = chunk.loc[safe_indices]
                 kept[modality].append(subset)
                 counts[modality] += len(subset)
             if all(
@@ -51,18 +61,39 @@ class GMAIMMBench:
         # print("Unique modality values:", sorted(all_modalities))
         frames = [pd.concat(parts, ignore_index=True) for parts in kept.values() if parts]
         self.ds = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        if n_skipped_images:
+            print(f"Skipped {n_skipped_images} oversized or unreadable images")
         print(self.ds.shape)
 
     def obtain_size(self):
         return len(self.ds)
 
+    def _is_safe_image(self, image_b64):
+        """Reject empty, unreadable, or PIL decompression-bomb images."""
+        if pd.isna(image_b64) or not str(image_b64).strip():
+            return False
+        try:
+            with Image.open(io.BytesIO(base64.b64decode(str(image_b64)))) as image:
+                max_pixels = Image.MAX_IMAGE_PIXELS
+                if max_pixels and image.size[0] * image.size[1] > max_pixels:
+                    return False
+            return True
+        except (Image.DecompressionBombError, OSError, ValueError):
+            return False
+
     def _decode_image(self, image_b64):
         if pd.isna(image_b64) or not str(image_b64).strip():
             return None
-        image = Image.open(io.BytesIO(base64.b64decode(str(image_b64))))
-        if image.mode in ("RGBA", "P"):
-            image = image.convert("RGB")
-        return image
+        try:
+            image = Image.open(io.BytesIO(base64.b64decode(str(image_b64))))
+            max_pixels = Image.MAX_IMAGE_PIXELS
+            if max_pixels and image.size[0] * image.size[1] > max_pixels:
+                return None
+            if image.mode in ("RGBA", "P"):
+                image = image.convert("RGB")
+            return image
+        except (Image.DecompressionBombError, OSError, ValueError):
+            return None
 
     def retrieve(self, idx):
         row = self.ds.iloc[idx]
@@ -96,7 +127,7 @@ class GMAIMMBench:
             "idx": idx,
             "img": self._decode_image(row["image"]),
             "question": question,
-            "gt_answer": gt_answer,
+            "gt_answer": str(gt_answer),
             "num_c": num_c,
         }
         return result

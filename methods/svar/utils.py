@@ -4,6 +4,10 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
+import inflect
+
+
+engine = inflect.engine()
 
 
 def set_act_get_hooks(model, attn_out=False):
@@ -111,6 +115,7 @@ def attnw_over_vision_layer_head_selected_text(
     vision_token_start,
     vision_token_end,
     sort_heads=False,
+    generation_start_idx=0,
 ):
     """
     Get the attention weights over the image tokens for the selected object text.
@@ -123,6 +128,10 @@ def attnw_over_vision_layer_head_selected_text(
     tokenizer: the tokenizer of the model
     vision_token_start/_end: int
         the start/end index of the image tokens
+    generation_start_idx: int
+        offset into `outputs["sequences"]` where generated tokens begin. Use 0 when
+        sequences contain only generated ids (LLaVA model manager); use prompt length
+        for HF generate outputs that include the prompt.
 
     Return:
     -------
@@ -130,20 +139,24 @@ def attnw_over_vision_layer_head_selected_text(
         the attention weights over the image tokens for the selected object text over layers and heads
         (bottom row is the 0-th layer, leftmost column is the first head)
     """
-    try:
-        selected_token_id = tokenizer(text, add_special_tokens=False)["input_ids"][0]
-        # the first index is adoptted if there are multiple occurrences
-        token_in_generation_idx = torch.nonzero(
-            # outputs["sequences"][0][1:] == selected_token_id
-            outputs["sequences"][0][0:] == selected_token_id
-        )[0].item()
-    except:
-        text = engine.plural(text)
-        selected_token_id = tokenizer(text, add_special_tokens=False)["input_ids"][0]
-        token_in_generation_idx = torch.nonzero(
-            # outputs["sequences"][0][1:] == selected_token_id
-            outputs["sequences"][0][0:] == selected_token_id
-        )[0].item()
+    generated_ids = outputs["sequences"][0][generation_start_idx:]
+    candidates = [text, " " + text]
+    plural = engine.plural(text)
+    if plural and plural != text:
+        candidates += [plural, " " + plural]
+
+    token_in_generation_idx = None
+    for candidate in candidates:
+        token_ids = tokenizer(candidate, add_special_tokens=False)["input_ids"]
+        if not token_ids:
+            continue
+        # print(candidate, token_ids[0], generated_ids)
+        matches = torch.nonzero(generated_ids == token_ids[0], as_tuple=False)
+        if matches.numel():
+            token_in_generation_idx = matches[0].item()
+            break
+    if token_in_generation_idx is None:
+        raise ValueError(f"'{text}' not found in the generated text.")
 
     text_attnw_layers_heads = outputs["attentions"][token_in_generation_idx]
     # print("text_attnw_layers_heads:", len(text_attnw_layers_heads), text_attnw_layers_heads[0].shape)
