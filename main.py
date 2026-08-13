@@ -33,16 +33,16 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--quick_benchmark", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--use_fastest", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--lvlm", type=str, default="medgemma-1.5-4b-it")
+    parser.add_argument("--lvlm", type=str, default="llava-1.5-7b-hf")
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--benchmark", type=str, default="GMAIMMBench")
+    parser.add_argument("--benchmark", type=str, default="ViLP")
     parser.add_argument(
         "--llm",
         type=str,
         default="Qwen2.5-3B-Instruct",
-        help="Judge LLM name in LLM_MAP, e.g. Qwen2.5-3B-Instruct or claude-sonnet-5.",
+        help="Judge LLM name in LLM_MAP, e.g. Qwen2.5-3B-Instruct, gemma-3-27b-it, or claude-sonnet-5.",
     )
-    parser.add_argument("--uncertainty", type=str, default="svar")
+    parser.add_argument("--uncertainty", type=str, default="vauq")
     parser.add_argument("--uncertainty_threshold", type=float, default=1.0)
     parser.add_argument(
         "--nll_mode",
@@ -222,7 +222,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     print(f"Benchmark size: {benchmark_size}")
     if args.quick_benchmark:
         # benchmark_size = min(benchmark_size, 33)
-        benchmark_size = min(benchmark_size, 10)
+        benchmark_size = min(benchmark_size, 20)
 
     # Run the benchmark
     split_inference_quantification = 1 if args.uncertainty in ["euq"] else 0
@@ -302,6 +302,8 @@ def handle_batch(args, lvlm, benchmark, llm):
     log_dict["Total samples"] = total
     end_time_str = get_cur_time()
     log_dict["end_time_str"] = end_time_str
+    log_dict["dataset_name"] = args.benchmark
+    log_dict["uncertainty_method"] = args.uncertainty
     if not os.path.exists("exp"):
         os.makedirs("exp")
     with open(f"exp/log_{begin_time_str}.json", "w") as f:

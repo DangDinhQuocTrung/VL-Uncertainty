@@ -12,6 +12,7 @@ from benchmark.MedVIGIL import MedVIGIL
 from benchmark.GMAIMMBench import GMAIMMBench
 
 from llm.Claude import Claude
+from llm.Gemma import Gemma
 from llm.Qwen import Qwen
 from lvlm.InternVL import InternVL
 from lvlm.LLaVA import LLaVA
@@ -72,6 +73,11 @@ LLM_MAP = {
     "Qwen2.5-3B-Instruct": Qwen,
     "Qwen2.5-7B-Instruct": Qwen,
     "Qwen2.5-14B-Instruct": Qwen,
+    "Qwen2.5-32B-Instruct": Qwen,
+    "Qwen2.5-72B-Instruct": Qwen,
+    "gemma-3-4b-it": Gemma,
+    "gemma-3-12b-it": Gemma,
+    "gemma-3-27b-it": Gemma,
     "claude-sonnet-5": Claude,
 }
 

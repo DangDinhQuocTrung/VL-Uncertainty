@@ -20,8 +20,8 @@ class MedVIGIL:
             )
         )
         self.ds = pd.read_csv(self.root_dir / "probes_mcq.csv")
-        self.max_dataset_size = 1000
-        self.ds = self.ds.head(self.max_dataset_size)
+        # self.max_dataset_size = 1000
+        # self.ds = self.ds.head(self.max_dataset_size)
 
     def obtain_size(self):
         return len(self.ds)
