@@ -66,15 +66,19 @@ class MedVIGIL:
         correct_letter = str(row["correct_letter"]).strip().upper()
         gt_answer = "ABCDE".index(correct_letter)
 
-        probe_kind_raw = row["probe_kind"] if "probe_kind" in row.index else ""
-        probe_kind = (
-            "" if pd.isna(probe_kind_raw) else str(probe_kind_raw).strip().lower()
+        # Probe-level answerability: refuse/uncertain probes are not answerable.
+        expected_behavior_raw = (
+            row["expected_behavior"] if "expected_behavior" in row.index else ""
         )
-        image_file_raw = row["image_file"]
-        image_file = "" if pd.isna(image_file_raw) else str(image_file_raw).strip()
-        flag_perturbed_inputs = (
-            bool(probe_kind) and probe_kind != "original"
-        ) or image_file.startswith("images_perturbed/")
+        expected_behavior = (
+            ""
+            if pd.isna(expected_behavior_raw)
+            else str(expected_behavior_raw).strip().lower()
+        )
+        flag_perturbed_inputs = expected_behavior in {
+            "refuse_or_flag",
+            "uncertain_or_lower_confidence",
+        }
 
         result = {
             "idx": idx,

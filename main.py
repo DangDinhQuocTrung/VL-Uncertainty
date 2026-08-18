@@ -23,9 +23,42 @@ from methods.vauq import estimate_uncertainty_by_vauq
 from methods.nll import estimate_uncertainty_by_nll
 from methods.pro import estimate_uncertainty_by_pro
 from methods.rds import estimate_uncertainty_by_rds
+from methods.vse import estimate_uncertainty_by_vse
 from utils.metrics import compute_f1_score
 
 warnings.filterwarnings("ignore")
+
+
+def normalize_uncertainty_args(args):
+    uncertainty = args.uncertainty.lower()
+
+    nll_aliases = {
+        "nll_avg": ("nll", "avg"),
+        "nll_average": ("nll", "average"),
+        "nll_max": ("nll", "max"),
+    }
+    rds_aliases = {
+        "rds_eigenembed": ("rds", "eigenembed"),
+        "rds_eigen": ("rds", "eigen"),
+        "rds_base": ("rds", "base"),
+        "rds_weighted": ("rds", "weighted"),
+        "rdsw": ("rds", "weighted"),
+    }
+
+    se_aliases = {
+        "semantic_entropy_nli": ("semantic_entropy", "nli"),
+        "semantic_entropy_llm": ("semantic_entropy", "llm"),
+        "se_nli": ("semantic_entropy", "nli"),
+    }
+
+    if uncertainty in nll_aliases:
+        args.uncertainty, args.nll_mode = nll_aliases[uncertainty]
+    elif uncertainty in rds_aliases:
+        args.uncertainty, args.rds_mode = rds_aliases[uncertainty]
+    elif uncertainty in se_aliases:
+        args.uncertainty, args.se_clustering = se_aliases[uncertainty]
+
+    return args
 
 
 def parse_args():
@@ -42,7 +75,16 @@ def parse_args():
         default="Qwen2.5-3B-Instruct",
         help="Judge LLM name in LLM_MAP, e.g. Qwen2.5-3B-Instruct, gemma-3-27b-it, or claude-sonnet-5.",
     )
-    parser.add_argument("--uncertainty", type=str, default="vauq")
+    parser.add_argument(
+        "--uncertainty",
+        type=str,
+        default="vse",
+        help=(
+            "Uncertainty method. You can also use combined aliases like "
+            "nll_max, nll_avg, rds_base, rds_weighted, rds_eigenembed, "
+            "semantic_entropy_nli, or vse."
+        ),
+    )
     parser.add_argument("--uncertainty_threshold", type=float, default=1.0)
     parser.add_argument(
         "--nll_mode",
@@ -86,6 +128,60 @@ def parse_args():
         default="all-MiniLM-L6-v2",
         help="SentenceTransformer model used to embed answers for RDS.",
     )
+    parser.add_argument(
+        "--se_clustering",
+        type=str,
+        default="nli",
+        choices=["llm", "nli"],
+        help=(
+            "Semantic clustering backend for free-form answers. "
+            "'nli' uses DeBERTa-large MNLI bidirectional entailment "
+            "(Kuhn et al. semantic entropy); 'llm' uses the judge LLM."
+        ),
+    )
+    parser.add_argument(
+        "--nli_model",
+        type=str,
+        default="microsoft/deberta-large-mnli",
+        help="Hugging Face NLI model for --se_clustering nli.",
+    )
+    parser.add_argument(
+        "--nli_device",
+        type=str,
+        default="auto",
+        help="Device for the NLI model: auto, cuda, cpu, or a device string.",
+    )
+    parser.add_argument(
+        "--vse_noise_sigma",
+        type=float,
+        default=20.0,
+        help="Gaussian noise std in pixel units (0-255) for VSE. Paper uses 20.",
+    )
+    parser.add_argument(
+        "--vse_cluster_threshold",
+        type=float,
+        default=0.5,
+        help="Hierarchical clustering distance threshold for VSE prototype aggregation.",
+    )
+    parser.add_argument(
+        "--vse_distance",
+        type=str,
+        default="deberta",
+        choices=["deberta", "cosine"],
+        help="Semantic distance for VSE: DeBERTa-MNLI (paper default) or cosine embeddings.",
+    )
+    parser.add_argument(
+        "--vse_nli_model",
+        type=str,
+        default="microsoft/deberta-v2-xlarge-mnli",
+        help="NLI model used as VSE semantic distance d(·,·). Paper uses DeBERTa-v2-xlarge-mnli.",
+    )
+    parser.add_argument(
+        "--vse_embed_model",
+        type=str,
+        default="all-MiniLM-L6-v2",
+        help="SentenceTransformer model used when --vse_distance cosine.",
+    )
 
     # Perturbation-specific arguments
     parser.add_argument("--visual_perturbation", type=str, default="blurring")
@@ -111,16 +207,16 @@ def parse_args():
     parser.add_argument(
         "--sampling_temp",
         type=float,
-        default=0.0,
+        default=1.0,
         help="Sampling temperature. For RDS, 0 defaults to 1.0 (paper-style multinomial sampling).",
     )
     parser.add_argument(
         "--sampling_time",
         type=int,
-        default=0,
+        default=5,
         help="Number of samples. For RDS, 0 defaults to --num_beams.",
     )
-    args = parser.parse_args()
+    args = normalize_uncertainty_args(parser.parse_args())
     print(vars(args))
     return args
 
@@ -198,6 +294,8 @@ def handle_single(args, idx, lvlm, benchmark, llm, log_dict):
         estimate_uncertainty_by_pro(args, lvlm, sample, llm, log_dict)
     elif args.uncertainty == "rds":
         estimate_uncertainty_by_rds(args, lvlm, sample, llm, log_dict)
+    elif args.uncertainty == "vse":
+        estimate_uncertainty_by_vse(args, lvlm, sample, llm, log_dict)
     else:
         raise ValueError(f"Unsupported method: {args.uncertainty}")
     return
@@ -222,7 +320,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     print(f"Benchmark size: {benchmark_size}")
     if args.quick_benchmark:
         # benchmark_size = min(benchmark_size, 33)
-        benchmark_size = min(benchmark_size, 20)
+        benchmark_size = min(benchmark_size, 12)
 
     # Run the benchmark
     split_inference_quantification = 1 if args.uncertainty in ["euq"] else 0
@@ -279,7 +377,7 @@ def handle_batch(args, lvlm, benchmark, llm):
                 correctness_gt.append(log_dict[idx]["flag_answer_correct"])
 
     # Compute metrics
-    uncertainty_scores = torch.tensor(uncertainty_scores)
+    uncertainty_scores = torch.tensor(uncertainty_scores, dtype=torch.float)
     correctness_gt = torch.tensor(correctness_gt, dtype=torch.int)
     detection_gt = correctness_gt if is_perturbation_detection else (1 - correctness_gt)
     auroc_score = auroc(uncertainty_scores, detection_gt, task="binary").item()

@@ -7,6 +7,7 @@ from utils.misc import *
 from utils.textual_perturbation import *
 from utils.visual_perturbation import *
 from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
+from methods.nli import get_nli_classifier
 from utils.constants import is_choice_question
 
 
@@ -185,6 +186,30 @@ def infer_single_sample(args, lvlm, sample, is_sampling, llm, log_dict):
     return
 
 
+def _llm_bidirectional_entailment(llm, answer_i, answer_j):
+    entailment_ij = llm.generate(
+        f"Does '{answer_i}' entail '{answer_j}'? Respond with either 'Yes' or 'No' only.",
+        0.1,
+    )
+    entailment_ji = llm.generate(
+        f"Does '{answer_j}' entail '{answer_i}'? Respond with either 'Yes' or 'No' only.",
+        0.1,
+    )
+    i_to_j = (
+        "Yes" in entailment_ij
+        or "yes" in entailment_ij
+        or "Y" in entailment_ij
+        or "y" in entailment_ij
+    )
+    j_to_i = (
+        "Yes" in entailment_ji
+        or "yes" in entailment_ji
+        or "Y" in entailment_ji
+        or "y" in entailment_ji
+    )
+    return i_to_j and j_to_i, entailment_ij, entailment_ji
+
+
 def uncertainty_estimation(args, sample, llm, log_dict):
     answer_sampling_list = log_dict[sample["idx"]]["answer_sampling_list"]
     answer_cluster_idx = []
@@ -198,6 +223,17 @@ def uncertainty_estimation(args, sample, llm, log_dict):
             else:
                 answer_cluster_idx.append(int(re.search(r"\d+", answer).group()))
     else:
+        clustering = getattr(args, "se_clustering", "llm")
+        log_dict[sample["idx"]]["se_clustering"] = clustering
+        nli = None
+        nli_question = parse_original_question(sample["question"])
+        if clustering == "nli":
+            nli = get_nli_classifier(
+                model_name=getattr(args, "nli_model", "microsoft/deberta-large-mnli"),
+                device=getattr(args, "nli_device", "auto"),
+            )
+            log_dict[sample["idx"]]["nli_model"] = nli.model_name
+
         answer_cluster_idx = [-1] * len(answer_sampling_list)
         cur_cluster_idx = 0
         log_dict[sample["idx"]]["entailment"] = {}
@@ -206,33 +242,29 @@ def uncertainty_estimation(args, sample, llm, log_dict):
                 answer_cluster_idx[i] = cur_cluster_idx
                 for j in range(i + 1, len(answer_sampling_list)):
                     if answer_cluster_idx[j] == -1:
-                        entailment_ij = llm.generate(
-                            f"Does '{answer_sampling_list[i]}' entail '{answer_sampling_list[j]}'? Respond with either 'Yes' or 'No' only.",
-                            0.1,
-                        )
-                        entailment_ji = llm.generate(
-                            f"Does '{answer_sampling_list[j]}' entail '{answer_sampling_list[i]}'? Respond with either 'Yes' or 'No' only.",
-                            0.1,
-                        )
+                        if clustering == "nli":
+                            equivalent, entailment_ij, entailment_ji = (
+                                nli.bidirectional_entailment(
+                                    answer_sampling_list[i],
+                                    answer_sampling_list[j],
+                                    question=nli_question,
+                                )
+                            )
+                        else:
+                            equivalent, entailment_ij, entailment_ji = (
+                                _llm_bidirectional_entailment(
+                                    llm,
+                                    answer_sampling_list[i],
+                                    answer_sampling_list[j],
+                                )
+                            )
                         log_dict[sample["idx"]]["entailment"][
                             f"{i}_{j}"
                         ] = entailment_ij
                         log_dict[sample["idx"]]["entailment"][
                             f"{j}_{i}"
                         ] = entailment_ji
-                        i_to_j = (
-                            "Yes" in entailment_ij
-                            or "yes" in entailment_ij
-                            or "Y" in entailment_ij
-                            or "y" in entailment_ij
-                        )
-                        j_to_i = (
-                            "Yes" in entailment_ji
-                            or "yes" in entailment_ji
-                            or "Y" in entailment_ji
-                            or "y" in entailment_ji
-                        )
-                        if i_to_j and j_to_i:
+                        if equivalent:
                             answer_cluster_idx[j] = cur_cluster_idx
                 cur_cluster_idx += 1
 
@@ -240,11 +272,16 @@ def uncertainty_estimation(args, sample, llm, log_dict):
 
     cluster_dis = collections.Counter(answer_cluster_idx)
     log_dict[sample["idx"]]["cluster_dis"] = cluster_dis
-    uncertainty = -sum(
-        (cnt / args.sampling_time) * math.log2(cnt / args.sampling_time)
-        for cnt in cluster_dis.values()
-    )
-    log_dict[sample["idx"]]["uncertainty"] = uncertainty
+    n_samples = len(answer_sampling_list)
+    if n_samples == 0:
+        uncertainty = 0.0
+    else:
+        uncertainty = -sum(
+            (cnt / n_samples) * math.log2(cnt / n_samples)
+            for cnt in cluster_dis.values()
+            if cnt > 0
+        )
+    log_dict[sample["idx"]]["uncertainty"] = float(uncertainty)
 
 
 def hallucination_detection(args, sample, log_dict):
