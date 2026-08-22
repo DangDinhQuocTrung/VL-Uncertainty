@@ -3,27 +3,12 @@ from transformers.generation.logits_process import LogitsProcessorList, TopKLogi
 
 from methods.svar.utils import *
 from utils.constants import is_choice_question
+from utils.model_utils import resolve_image_token_id
 from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
 
 
-def _get_image_token_id(lvlm, lvlm_type):
-    name = lvlm_type.lower()
-    processor = getattr(lvlm, "processor", None)
-    model = getattr(lvlm, "model", None)
-    if "llava" in name and model is not None and hasattr(model.config, "image_token_index"):
-        return model.config.image_token_index
-    if processor is None:
-        raise ValueError(f"Cannot resolve image token id for {lvlm_type}")
-    tokenizer = getattr(processor, "tokenizer", processor)
-    if "qwen" in name:
-        return tokenizer.convert_tokens_to_ids("<|image_pad|>")
-    if "gemma" in name:
-        return tokenizer.convert_tokens_to_ids("<image_soft_token>")
-    raise ValueError(f"Unsupported LVLM for SVAR: {lvlm_type}")
-
-
 def _get_vision_token_span(lvlm, inputs, lvlm_type):
-    image_token_id = _get_image_token_id(lvlm, lvlm_type)
+    image_token_id = resolve_image_token_id(lvlm, name=lvlm_type)
     visual_token_positions = (inputs["input_ids"][0] == image_token_id).nonzero(as_tuple=True)[0]
     if visual_token_positions.numel() == 0 and "token_type_ids" in inputs:
         visual_token_positions = (inputs["token_type_ids"][0] == 1).nonzero(as_tuple=True)[0]

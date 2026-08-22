@@ -27,7 +27,8 @@ class Qwen2VL:
         self.model.eval()
         self.processor = AutoProcessor.from_pretrained(model_name)
 
-    def generate(self, image, question, temp, return_more=False):
+    def prepare_inputs(self, image, question):
+        """Build processor inputs for (image, question), matching generate()."""
         messages = [
             {
                 "role": "user",
@@ -41,13 +42,16 @@ class Qwen2VL:
             messages, tokenize=False, add_generation_prompt=True
         )
         image_inputs, video_inputs = process_vision_info(messages)
-        inputs = self.processor(
+        return self.processor(
             text=[text],
             images=image_inputs,
             videos=video_inputs,
             padding=True,
             return_tensors="pt",
         ).to(self.device)
+
+    def generate(self, image, question, temp, return_more=False):
+        inputs = self.prepare_inputs(image, question)
         outputs = self.model.generate(
             **inputs,
             max_new_tokens=64,

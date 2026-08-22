@@ -37,7 +37,7 @@ def parse_args():
     parser.add_argument(
         "--llm",
         type=str,
-        required=True,
+        default="Qwen2.5-72B-Instruct",
         help="Judge LLM name, e.g. gemma-3-27b-it, Qwen2.5-72B-Instruct, or claude-sonnet-5.",
     )
     parser.add_argument(

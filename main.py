@@ -57,6 +57,8 @@ def normalize_uncertainty_args(args):
         args.uncertainty, args.rds_mode = rds_aliases[uncertainty]
     elif uncertainty in se_aliases:
         args.uncertainty, args.se_clustering = se_aliases[uncertainty]
+    elif uncertainty in ("vse", "visual_semantic_entropy"):
+        args.uncertainty = "vse"
 
     return args
 
@@ -66,7 +68,7 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--quick_benchmark", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--use_fastest", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--lvlm", type=str, default="llava-1.5-7b-hf")
+    parser.add_argument("--lvlm", type=str, default="Qwen2-VL-7B-Instruct")
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--benchmark", type=str, default="ViLP")
     parser.add_argument(
@@ -78,7 +80,7 @@ def parse_args():
     parser.add_argument(
         "--uncertainty",
         type=str,
-        default="vse",
+        default="semantic_entropy_nli",
         help=(
             "Uncertainty method. You can also use combined aliases like "
             "nll_max, nll_avg, rds_base, rds_weighted, rds_eigenembed, "
@@ -181,6 +183,16 @@ def parse_args():
         type=str,
         default="all-MiniLM-L6-v2",
         help="SentenceTransformer model used when --vse_distance cosine.",
+    )
+    parser.add_argument(
+        "--compute_visual_entropy",
+        type=lambda x: x.lower() == "true",
+        default="True",
+        help=(
+            "If true and uncertainty is semantic_entropy, also compute LogitLens "
+            "visual entropy H_vis on the original image and store per-token "
+            "entropies (for Fig. 3-style analysis)."
+        ),
     )
 
     # Perturbation-specific arguments

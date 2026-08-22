@@ -14,10 +14,10 @@ from benchmark.GMAIMMBench import GMAIMMBench
 from llm.Claude import Claude
 from llm.Gemma import Gemma
 from llm.Qwen import Qwen
-from lvlm.InternVL import InternVL
+from lvlm.outdated.InternVL import InternVL
 from lvlm.LLaVA import LLaVA
 from lvlm.LLaVAMed1F import LLaVAMed1F
-from lvlm.LLaVANeXT import LLaVANeXT
+from lvlm.outdated.LLaVANeXT import LLaVANeXT
 from lvlm.Qwen2VL import Qwen2VL
 from lvlm.Qwen2FVL import Qwen2FVL
 from lvlm.HuatuoGPTVision import HuatuoGPTVision

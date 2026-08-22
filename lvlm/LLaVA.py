@@ -78,6 +78,26 @@ class LLaVA:
             answers.append(answer)
         return answers
 
+    def prepare_inputs(self, image, question):
+        """Build processor inputs for (image, question), matching generate()."""
+        if isinstance(image, str):
+            image = Image.open(image).convert("RGB")
+
+        conversation = [
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": question}, {"type": "image"}],
+            }
+        ]
+        prompt = self.processor.apply_chat_template(
+            conversation, add_generation_prompt=True
+        )
+        return (
+            self.processor(images=image, text=prompt, return_tensors="pt")
+            .to(0, torch.float16)
+            .to(self.device)
+        )
+
     def generate(
         self,
         image,
@@ -91,23 +111,7 @@ class LLaVA:
         diversity_penalty=0.0,
         length_penalty=1.0,
     ):
-        if isinstance(image, str):
-            image = Image.open(image).convert("RGB")
-
-        conversation = [
-            {
-                "role": "user",
-                "content": [{"type": "text", "text": question}, {"type": "image"}],
-            }
-        ]
-        prompt = self.processor.apply_chat_template(
-            conversation, add_generation_prompt=True
-        )
-        inputs = (
-            self.processor(images=image, text=prompt, return_tensors="pt")
-            .to(0, torch.float16)
-            .to(self.device)
-        )
+        inputs = self.prepare_inputs(image, question)
         use_euq_hooks = return_more and return_mode == 0
 
         down_proj_features = []

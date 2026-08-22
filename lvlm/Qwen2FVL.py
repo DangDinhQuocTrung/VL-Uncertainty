@@ -87,6 +87,29 @@ class Qwen2FVL:
     def _get_temp(self, temp):
         return temp
 
+    def prepare_inputs(self, image, question):
+        """Build processor inputs for (image, question), matching generate()."""
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": image},
+                    {"type": "text", "text": question},
+                ],
+            }
+        ]
+        text = self.processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        image_inputs, video_inputs = process_vision_info(messages)
+        return self.processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        ).to(self.device)
+
     def generate(
         self,
         image,
@@ -100,29 +123,7 @@ class Qwen2FVL:
         diversity_penalty=0.0,
         length_penalty=1.0,
     ):
-        prompt = question
-        # prompt = make_prompt(None, question)
-
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image", "image": image},
-                    {"type": "text", "text": prompt},
-                ],
-            }
-        ]
-        text = self.processor.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        image_inputs, video_inputs = process_vision_info(messages)
-        inputs = self.processor(
-            text=[text],
-            images=image_inputs,
-            videos=video_inputs,
-            padding=True,
-            return_tensors="pt",
-        ).to(self.device)
+        inputs = self.prepare_inputs(image, question)
         use_euq_hooks = return_more and return_mode == 0
 
         down_proj_features = []

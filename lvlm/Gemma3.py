@@ -74,7 +74,7 @@ class Gemma3:
             torch.save(attention_weight_cpu, attention_weights_path)
         return
 
-    def _prepare_inputs(self, image, question):
+    def prepare_inputs(self, image, question):
         if isinstance(image, str):
             image = Image.open(image).convert("RGB")
 
@@ -123,7 +123,7 @@ class Gemma3:
         diversity_penalty=0.0,
         length_penalty=1.0,
     ):
-        inputs = self._prepare_inputs(image, question)
+        inputs = self.prepare_inputs(image, question)
         use_euq_hooks = return_more and return_mode == 0
 
         down_proj_features = []
