@@ -100,6 +100,26 @@ BENCHMARK_TYPE = {
     "GMAIMMBench": "MULTI_CHOICE",
 }
 
+# Top-level keys in exp/log_*.json that are run metadata, not per-sample entries.
+LOG_META_KEYS = frozenset(
+    {
+        "args",
+        "begin_time_str",
+        "end_time_str",
+        "dataset_name",
+        "uncertainty_method",
+        "Total samples",
+        "Base task Accuracy",
+        "weight_dir",
+        "lvlm_version",
+    }
+)
+
+DETECTION_AUROC_KEYS = (
+    "Hallucination detection AUROC",
+    "Perturbation detection AUROC",
+)
+
 
 def is_choice_question(args, sample):
     return BENCHMARK_TYPE[args.benchmark] == "MULTI_CHOICE" or bool(

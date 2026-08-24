@@ -17,13 +17,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 
+from utils.constants import DETECTION_AUROC_KEYS
+
 BENCHMARK_IN_ARGS_RE = re.compile(r"benchmark=['\"]([^'\"]+)['\"]")
 UNCERTAINTY_IN_ARGS_RE = re.compile(r"uncertainty=['\"]([^'\"]+)['\"]")
-
-DETECTION_AUROC_KEYS = (
-    "Hallucination detection AUROC",
-    "Perturbation detection AUROC",
-)
 
 METHOD_DISPLAY = {
     "vl_uncertainty": "VL-Uncertainty",

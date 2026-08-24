@@ -6,7 +6,7 @@ import collections
 from utils.misc import *
 from utils.textual_perturbation import *
 from utils.visual_perturbation import *
-from utils.visual_entropy import maybe_log_visual_entropy
+from utils.visual_statistics import maybe_log_visual_statistics
 from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
 from methods.nli import get_nli_classifier
 from utils.constants import is_choice_question
@@ -318,7 +318,7 @@ def vl_uncertainty(args, lvlm, sample, llm, log_dict):
 
 def semantic_entropy(args, lvlm, sample, llm, log_dict):
     # Optional LogitLens visual entropy on the original image (VSE Sec. 3.2).
-    maybe_log_visual_entropy(args, lvlm, sample, log_dict)
+    maybe_log_visual_statistics(args, lvlm, sample, log_dict)
 
     log_dict[sample["idx"]]["answer_sampling_list"] = []
     for _ in range(args.sampling_time):

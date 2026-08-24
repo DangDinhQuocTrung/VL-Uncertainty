@@ -5,6 +5,7 @@ from pathlib import Path
 from utils.constants import is_choice_question
 from methods.euq.evidence import EvidenceModel
 from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
+from utils.visual_statistics import maybe_log_visual_statistics
 
 
 def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
@@ -37,6 +38,7 @@ def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
             log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
         log_dict[sample["idx"]]["flag_answer_correct"] = flag_answer_correct
         log_dict[sample["idx"]]["answer_sampling_list"] = [answer]
+        maybe_log_visual_statistics(args, lvlm, sample, log_dict)
     else:
         answer = log_dict[sample["idx"]]["answer"]
         down_proj_features = torch.load(feature_weight_dir / f"{lvlm_version}_sample_{index:04d}_down_proj_features.pth", map_location=device)
@@ -108,7 +110,7 @@ def estimate_uncertainty_by_euq(args, lvlm, sample, llm, log_dict):
     total_uncertainty = sample_conflict_value + sample_ignorance_value
 
     # Log the results
-    log_dict[sample["idx"]]["uncertainty"] = sample_conflict_value
+    log_dict[sample["idx"]]["uncertainty"] = total_uncertainty
     log_dict[sample["idx"]]["uncertainty_threshold"] = args.uncertainty_threshold
     flag_predict_hallucination = log_dict[sample["idx"]]["uncertainty"] >= args.uncertainty_threshold
     log_dict[sample["idx"]]["flag_predict_hallucination"] = flag_predict_hallucination

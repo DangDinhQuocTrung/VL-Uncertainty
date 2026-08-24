@@ -1,21 +1,21 @@
-"""Plot semantic entropy distributions by visual certainty.
+"""Plot uncertainty metrics by visual certainty (H_vis).
 
-Reads an experiment log produced with:
-  --uncertainty semantic_entropy_nli --compute_visual_entropy true
+Reads experiment logs produced with --compute_visual_statistics true.
 
-Reproduces the VSE paper (arXiv:2606.31407) Sec. 3.2 / Fig. 3-Left style analysis:
-  - H_vis = average LogitLens entropy over visual tokens
-  - Visually Confident  = bottom `percentile` of H_vis
-  - Visually Uncertain  = top `percentile` of H_vis
-  - Plot semantic entropy distributions for the two groups
-    (optionally restricted to incorrect answers, as in the paper).
+Semantic entropy (VSE Sec. 3.2 / Fig. 3-Left):
+  - Split samples by H_vis (bottom/top percentile)
+  - Plot semantic entropy for visually confident vs uncertain groups
+
+EUQ:
+  - Split by visual-token mean head conflict / ignorance
+  - Plot those EUQ scores, or semantic entropy if --reference_log is an SE log
 
 Example:
   python interpretability/plot_visual_certainty_se.py \\
-      --log exp/log_YYYY_MM_DD_HH_MM_SS.json \\
+      --log exp/log_euq.json \\
+      --reference_log exp/log_semantic_entropy.json \\
       --percentile 0.2 \\
-      --incorrect_only \\
-      --out interpretability/fig_visual_certainty_se.png
+      --incorrect_only true
 """
 
 from __future__ import annotations
@@ -28,21 +28,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 
-
-META_KEYS = {
-    "args",
-    "begin_time_str",
-    "end_time_str",
-    "dataset_name",
-    "uncertainty_method",
-    "Total samples",
-    "Base task Accuracy",
-}
-
-DETECTION_AUROC_KEYS = (
-    "Hallucination detection AUROC",
-    "Perturbation detection AUROC",
-)
+from utils.constants import DETECTION_AUROC_KEYS, LOG_META_KEYS
 
 
 def load_log(log_path: str) -> Dict[str, Any]:
@@ -67,39 +53,117 @@ def print_run_metrics(log: Dict[str, Any]) -> None:
         print("Detection AUROC: (not found in log)")
 
 
-def _is_sample_entry(key: str, value: Any) -> bool:
-    if key in META_KEYS or not isinstance(value, dict):
+def detect_method(log: Dict[str, Any]) -> str:
+    method = str(log.get("uncertainty_method", "")).lower()
+    if "semantic_entropy" in method:
+        return "semantic_entropy"
+    if method == "euq":
+        return "euq"
+    raise ValueError(
+        f"Unsupported uncertainty_method '{log.get('uncertainty_method')}'. "
+        "Expected semantic_entropy or euq."
+    )
+
+
+def _is_sample_entry(key: str, value: Any, required_keys: Tuple[str, ...]) -> bool:
+    if key in LOG_META_KEYS or not isinstance(value, dict):
         return False
     if "Hallucination detection" in key or "Perturbation detection" in key:
         return False
-    return "uncertainty" in value and "visual_entropy" in value
+    return all(k in value for k in required_keys)
 
 
-def load_samples(log: Dict[str, Any]) -> List[Dict[str, Any]]:
+def load_samples(log: Dict[str, Any], method: str) -> List[Dict[str, Any]]:
+    if method == "semantic_entropy":
+        required = ("visual_entropy", "uncertainty")
+    elif method == "euq":
+        required = (
+            "visual_entropy",
+            "visual_mean_head_conflict_value",
+            "visual_mean_head_ignorance_value",
+        )
+    else:
+        raise ValueError(f"Unsupported method: {method}")
+
     samples = []
     for key, value in log.items():
-        if not _is_sample_entry(key, value):
+        if not _is_sample_entry(key, value, required):
             continue
         if not value.get("flag_sample_valid", True):
             continue
-        samples.append(
-            {
-                "idx": int(key) if str(key).isdigit() else key,
-                "visual_entropy": float(value["visual_entropy"]),
-                "uncertainty": float(value["uncertainty"]),
-                "flag_answer_correct": bool(value.get("flag_answer_correct", True)),
-            }
-        )
+        sample = {
+            "idx": int(key) if str(key).isdigit() else key,
+            "visual_entropy": float(value["visual_entropy"]),
+            "flag_answer_correct": bool(value.get("flag_answer_correct", True)),
+        }
+        if method == "semantic_entropy":
+            sample["uncertainty"] = float(value["uncertainty"])
+        else:
+            sample["visual_mean_head_conflict_value"] = float(
+                value["visual_mean_head_conflict_value"]
+            )
+            sample["visual_mean_head_ignorance_value"] = float(
+                value["visual_mean_head_ignorance_value"]
+            )
+        samples.append(sample)
+
     if not samples:
         raise ValueError(
-            "No samples with both 'visual_entropy' and 'uncertainty' found in log. "
-            "Re-run with --compute_visual_entropy true."
+            f"No samples with required keys {required} found in log. "
+            "Re-run with --compute_visual_statistics true."
         )
     return samples
 
 
+def load_uncertainty_by_idx(log: Dict[str, Any]) -> Dict[Any, float]:
+    """Map sample idx -> uncertainty from a (typically semantic entropy) log."""
+    uncertainties = {}
+    for key, value in log.items():
+        if not _is_sample_entry(key, value, ("uncertainty",)):
+            continue
+        if not value.get("flag_sample_valid", True):
+            continue
+        idx = int(key) if str(key).isdigit() else key
+        uncertainties[idx] = float(value["uncertainty"])
+    if not uncertainties:
+        raise ValueError(
+            "No samples with 'uncertainty' found in --reference_log."
+        )
+    return uncertainties
+
+
+def attach_reference_uncertainty(
+    samples: List[Dict[str, Any]],
+    reference_uncertainties: Dict[Any, float],
+) -> List[Dict[str, Any]]:
+    """Overwrite plotted uncertainty with values from the reference log."""
+    merged = []
+    missing = 0
+    for sample in samples:
+        if sample["idx"] not in reference_uncertainties:
+            missing += 1
+            continue
+        sample = dict(sample)
+        sample["uncertainty"] = reference_uncertainties[sample["idx"]]
+        merged.append(sample)
+    if missing:
+        print(
+            f"Dropped {missing} samples with no matching idx in --reference_log."
+        )
+    if not merged:
+        raise ValueError(
+            "No overlapping sample idx between --log and --reference_log."
+        )
+    print(
+        f"Using reference uncertainty for {len(merged)} overlapping samples."
+    )
+    return merged
+
+
 def split_by_visual_certainty(
     samples: List[Dict[str, Any]],
+    value_key: str,
+    split_key: str,
     percentile: float = 0.2,
     incorrect_only: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, Dict[str, float]]:
@@ -111,46 +175,44 @@ def split_by_visual_certainty(
             "Try --incorrect_only false or a larger log."
         )
 
-    h_vis = np.asarray([s["visual_entropy"] for s in samples], dtype=np.float64)
-    se = np.asarray([s["uncertainty"] for s in samples], dtype=np.float64)
+    split_values = np.asarray([s[split_key] for s in samples], dtype=np.float64)
+    values = np.asarray([s[value_key] for s in samples], dtype=np.float64)
 
-    lo = float(np.quantile(h_vis, percentile))
-    hi = float(np.quantile(h_vis, 1.0 - percentile))
+    lo = float(np.quantile(split_values, percentile))
+    hi = float(np.quantile(split_values, 1.0 - percentile))
 
-    # Confident = low visual entropy; uncertain = high visual entropy.
-    confident_mask = h_vis <= lo
-    uncertain_mask = h_vis >= hi
+    confident_mask = split_values <= lo
+    uncertain_mask = split_values >= hi
 
-    # If ties at the quantile push one side empty, fall back to strict argsort ranks.
     if confident_mask.sum() == 0 or uncertain_mask.sum() == 0:
-        order = np.argsort(h_vis)
+        order = np.argsort(split_values)
         k = max(1, int(round(len(samples) * percentile)))
         confident_idx = order[:k]
         uncertain_idx = order[-k:]
-        se_conf = se[confident_idx]
-        se_unc = se[uncertain_idx]
-        lo = float(h_vis[confident_idx].max())
-        hi = float(h_vis[uncertain_idx].min())
+        values_conf = values[confident_idx]
+        values_unc = values[uncertain_idx]
+        lo = float(split_values[confident_idx].max())
+        hi = float(split_values[uncertain_idx].min())
     else:
-        se_conf = se[confident_mask]
-        se_unc = se[uncertain_mask]
+        values_conf = values[confident_mask]
+        values_unc = values[uncertain_mask]
 
     stats = {
         "n_total": float(len(samples)),
-        "n_confident": float(len(se_conf)),
-        "n_uncertain": float(len(se_unc)),
-        "h_vis_low_threshold": lo,
-        "h_vis_high_threshold": hi,
-        "se_confident_mean": float(se_conf.mean()) if len(se_conf) else float("nan"),
-        "se_uncertain_mean": float(se_unc.mean()) if len(se_unc) else float("nan"),
+        "n_confident": float(len(values_conf)),
+        "n_uncertain": float(len(values_unc)),
+        "split_low_threshold": lo,
+        "split_high_threshold": hi,
+        "confident_mean": float(values_conf.mean()) if len(values_conf) else float("nan"),
+        "uncertain_mean": float(values_unc.mean()) if len(values_unc) else float("nan"),
     }
-    return se_conf, se_unc, stats
+    return values_conf, values_unc, stats
 
 
-def _plot_one_hist(ax, values: np.ndarray, title: str, color: str):
+def _plot_one_hist(ax, values: np.ndarray, title: str, color: str, xlabel: str):
     if len(values) == 0:
         ax.set_title(f"{title}\n(n=0)")
-        ax.set_xlabel("Semantic Entropy")
+        ax.set_xlabel(xlabel)
         ax.set_ylabel("Count")
         return
     ax.hist(values, bins="auto", color=color, edgecolor="black", alpha=0.85)
@@ -162,38 +224,42 @@ def _plot_one_hist(ax, values: np.ndarray, title: str, color: str):
         label=f"mean={values.mean():.3f}",
     )
     ax.set_title(f"{title}\n(n={len(values)})")
-    ax.set_xlabel("Semantic Entropy")
+    ax.set_xlabel(xlabel)
     ax.set_ylabel("Count")
     ax.legend(frameon=False)
 
 
 def plot_distributions(
-    se_confident: np.ndarray,
-    se_uncertain: np.ndarray,
+    values_confident: np.ndarray,
+    values_uncertain: np.ndarray,
     stats: Dict[str, float],
     out_path: str,
+    xlabel: str,
+    group_labels: Tuple[str, str],
     title: Optional[str] = None,
 ):
     fig, axes = plt.subplots(1, 2, figsize=(10, 4), sharey=True)
     _plot_one_hist(
         axes[0],
-        se_confident,
-        "Visually Confident (low $H_{vis}$)",
+        values_confident,
+        group_labels[0],
         color="#4C78A8",
+        xlabel=xlabel,
     )
     _plot_one_hist(
         axes[1],
-        se_uncertain,
-        "Visually Uncertain (high $H_{vis}$)",
+        values_uncertain,
+        group_labels[1],
         color="#F58518",
+        xlabel=xlabel,
     )
 
     subtitle = (
-        f"thresholds: H_vis≤{stats['h_vis_low_threshold']:.3f} / "
-        f"H_vis≥{stats['h_vis_high_threshold']:.3f}  |  "
+        f"thresholds: split≤{stats['split_low_threshold']:.3f} / "
+        f"split≥{stats['split_high_threshold']:.3f}  |  "
         f"N={int(stats['n_total'])}"
     )
-    fig.suptitle(title or "Semantic Entropy by Visual Certainty", fontsize=13)
+    fig.suptitle(title or f"{xlabel} by Visual Certainty", fontsize=13)
     fig.text(0.5, 0.01, subtitle, ha="center", fontsize=9, color="#444444")
     fig.tight_layout(rect=[0, 0.05, 1, 0.93])
 
@@ -203,15 +269,36 @@ def plot_distributions(
     print(f"Saved figure to {out_path}")
 
 
+def _default_out_path(method: str, metric: str, out: Optional[str]) -> str:
+    if out is not None:
+        if method == "semantic_entropy":
+            return out
+        stem, ext = os.path.splitext(out)
+        ext = ext or ".png"
+        return f"{stem}_{metric}{ext}"
+    if method == "semantic_entropy":
+        return "exp/fig_visual_certainty_se.png"
+    return f"exp/fig_visual_certainty_euq_{metric}.png"
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Plot SE distributions for visually certain vs uncertain samples."
+        description="Plot uncertainty metrics by visual certainty (H_vis)."
     )
     parser.add_argument(
         "--log",
         type=str,
         required=True,
-        help="Path to exp/log_*.json produced with --compute_visual_entropy true.",
+        help="Path to exp/log_*.json produced with --compute_visual_statistics true.",
+    )
+    parser.add_argument(
+        "--reference_log",
+        type=str,
+        default=None,
+        help=(
+            "Log whose 'uncertainty' values are plotted. Defaults to --log. "
+            "Pass a semantic_entropy log to compare EUQ visual scores against SE."
+        ),
     )
     parser.add_argument(
         "--percentile",
@@ -228,14 +315,17 @@ def parse_args():
     parser.add_argument(
         "--out",
         type=str,
-        default="exp/fig_visual_certainty_se.png",
-        help="Output figure path.",
+        default=None,
+        help=(
+            "Output figure path. For euq, conflict/ignorance plots use stem_conflict "
+            "and stem_ignorance suffixes."
+        ),
     )
     parser.add_argument(
         "--title",
         type=str,
         default=None,
-        help="Optional figure title override.",
+        help="Optional figure title override (semantic_entropy only).",
     )
     return parser.parse_args()
 
@@ -243,23 +333,94 @@ def parse_args():
 def main():
     args = parse_args()
     log = load_log(args.log)
+    print("Primary log:")
     print_run_metrics(log)
-    samples = load_samples(log)
-    se_conf, se_unc, stats = split_by_visual_certainty(
-        samples,
-        percentile=args.percentile,
-        incorrect_only=args.incorrect_only,
-    )
-    print("Split stats:")
-    for k, v in stats.items():
-        print(f"  {k}: {v}")
 
-    title = args.title
-    if title is None:
-        subset = "incorrect answers" if args.incorrect_only else "all answers"
-        title = f"Semantic Entropy by Visual Certainty ({subset})"
+    reference_path = args.reference_log or args.log
+    use_reference = os.path.abspath(reference_path) != os.path.abspath(args.log)
+    if use_reference:
+        reference_log = load_log(reference_path)
+        print(f"Reference log ({reference_path}):")
+        print_run_metrics(reference_log)
+    else:
+        reference_log = log
 
-    plot_distributions(se_conf, se_unc, stats, args.out, title=title)
+    method = detect_method(log)
+    print(f"Detected method: {method}")
+    samples = load_samples(log, method)
+    if use_reference:
+        samples = attach_reference_uncertainty(
+            samples, load_uncertainty_by_idx(reference_log)
+        )
+
+    subset = "incorrect answers" if args.incorrect_only else "all answers"
+    plot_uncertainty = use_reference
+    value_xlabel = "Semantic Entropy" if plot_uncertainty else None
+
+    if method == "semantic_entropy":
+        values_conf, values_unc, stats = split_by_visual_certainty(
+            samples,
+            value_key="uncertainty",
+            split_key="visual_entropy",
+            percentile=args.percentile,
+            incorrect_only=args.incorrect_only,
+        )
+        print("Split stats:")
+        for k, v in stats.items():
+            print(f"  {k}: {v}")
+
+        title = args.title or f"Semantic Entropy by Visual Certainty ({subset})"
+        out_path = _default_out_path(method, "se", args.out)
+        plot_distributions(
+            values_conf,
+            values_unc,
+            stats,
+            out_path,
+            xlabel=value_xlabel or "Semantic Entropy",
+            group_labels=(
+                "Visually Confident (low $H_{vis}$)",
+                "Visually Uncertain (high $H_{vis}$)",
+            ),
+            title=title,
+        )
+        return
+
+    for metric_key, metric_label in (
+        ("visual_mean_head_conflict_value", "Visual Mean Head Conflict"),
+        ("visual_mean_head_ignorance_value", "Visual Mean Head Ignorance"),
+    ):
+        value_key = "uncertainty" if plot_uncertainty else metric_key
+        values_conf, values_unc, stats = split_by_visual_certainty(
+            samples,
+            value_key=value_key,
+            split_key=metric_key,
+            percentile=args.percentile,
+            incorrect_only=args.incorrect_only,
+        )
+        print(f"Split stats ({metric_key}):")
+        for k, v in stats.items():
+            print(f"  {k}: {v}")
+
+        suffix = "conflict" if "conflict" in metric_key else "ignorance"
+        out_path = _default_out_path(method, suffix, args.out)
+        if plot_uncertainty:
+            xlabel = "Semantic Entropy"
+            title = f"Semantic Entropy by {metric_label} ({subset})"
+        else:
+            xlabel = metric_label
+            title = f"{metric_label} by Visual Certainty ({subset})"
+        plot_distributions(
+            values_conf,
+            values_unc,
+            stats,
+            out_path,
+            xlabel=xlabel,
+            group_labels=(
+                f"Low {metric_label}",
+                f"High {metric_label}",
+            ),
+            title=title,
+        )
 
 
 if __name__ == "__main__":

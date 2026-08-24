@@ -68,7 +68,7 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--quick_benchmark", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--use_fastest", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--lvlm", type=str, default="Qwen2-VL-7B-Instruct")
+    parser.add_argument("--lvlm", type=str, default="Qwen2.5-VL-7B-Instruct")
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--benchmark", type=str, default="ViLP")
     parser.add_argument(
@@ -80,7 +80,7 @@ def parse_args():
     parser.add_argument(
         "--uncertainty",
         type=str,
-        default="semantic_entropy_nli",
+        default="euq",
         help=(
             "Uncertainty method. You can also use combined aliases like "
             "nll_max, nll_avg, rds_base, rds_weighted, rds_eigenembed, "
@@ -185,13 +185,13 @@ def parse_args():
         help="SentenceTransformer model used when --vse_distance cosine.",
     )
     parser.add_argument(
-        "--compute_visual_entropy",
+        "--compute_visual_statistics",
         type=lambda x: x.lower() == "true",
         default="True",
         help=(
-            "If true and uncertainty is semantic_entropy, also compute LogitLens "
-            "visual entropy H_vis on the original image and store per-token "
-            "entropies (for Fig. 3-style analysis)."
+            "If true, compute visual interpretability statistics on the original "
+            "image: H_vis for semantic_entropy; H_vis plus visual-token mean head "
+            "conflict/ignorance for euq."
         ),
     )
 
@@ -332,7 +332,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     print(f"Benchmark size: {benchmark_size}")
     if args.quick_benchmark:
         # benchmark_size = min(benchmark_size, 33)
-        benchmark_size = min(benchmark_size, 12)
+        benchmark_size = min(benchmark_size, 45)
 
     # Run the benchmark
     split_inference_quantification = 1 if args.uncertainty in ["euq"] else 0
