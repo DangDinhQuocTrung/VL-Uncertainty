@@ -13,7 +13,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from methods.beam_utils import generate_temperature_samples
+from methods.beam_utils import generate_greedy_answer, generate_temperature_samples
 from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
 from utils.constants import is_choice_question
 
@@ -102,9 +102,10 @@ def estimate_uncertainty_by_rds(args, lvlm, sample, llm, log_dict):
     rds_mode = getattr(args, "rds_mode", "base")
     embed_model_name = getattr(args, "rds_embed_model", "all-MiniLM-L6-v2")
 
-    # Paper: multinomial sampling with temperature (not beam search).
+    # Main answer: greedy / inference-temp (aligned with VAUQ).
+    answer = generate_greedy_answer(args, lvlm, sample)
+    # Uncertainty: temperature samples only (RDS paper).
     samples = generate_temperature_samples(args, lvlm, sample)
-    answer = samples["answer"]
     answers = samples["answers"]
     avg_nlls = samples["avg_nlls"]
 

@@ -56,11 +56,12 @@ def compute_visual_entropy(lvlm, image, question, chunk_size=256):
         chunk = hidden[start : start + chunk_size]
         ent = _token_entropy_from_logits(lm_head(chunk))
         entropies.append(ent.detach().float().cpu())
-    h_vis = float(torch.cat(entropies, dim=0).mean().item())
+    token_entropies = torch.cat(entropies, dim=0)
 
     return {
-        "visual_entropy": h_vis,
+        "visual_entropy": float(token_entropies.mean().item()),
         "n_visual_tokens": int(visual_positions.numel()),
+        "visual_token_entropies": [float(x) for x in token_entropies.tolist()],
     }
 
 
@@ -102,16 +103,24 @@ def compute_visual_euq_head_statistics(lvlm, image, question, weight_dir, lvlm_v
     conflict_sum = 0.0
     ig_sum = 0.0
     n_tokens = hidden.shape[0]
+    conflict_values = []
+    ig_values = []
     for i in range(n_tokens):
         feature = hidden[i : i + 1]
         head_evidence_model.get_evidence_weights(feature.T)
-        conflict_sum += head_evidence_model.get_evidence_conflict().item()
-        ig_sum += head_evidence_model.get_evidence_ignorance().item()
+        conflict = head_evidence_model.get_evidence_conflict().item()
+        ig = head_evidence_model.get_evidence_ignorance().item()
+        conflict_sum += conflict
+        ig_sum += ig
+        conflict_values.append(float(conflict))
+        ig_values.append(float(ig))
 
     return {
         "visual_mean_head_conflict_value": conflict_sum / n_tokens,
         "visual_mean_head_ignorance_value": ig_sum / n_tokens,
         "n_visual_tokens": int(n_tokens),
+        "visual_token_head_conflict_values": conflict_values,
+        "visual_token_head_ignorance_values": ig_values,
     }
 
 
@@ -120,10 +129,8 @@ def maybe_log_visual_statistics(args, lvlm, sample, log_dict):
     if not getattr(args, "compute_visual_statistics", False):
         return None
 
+    log_per_image = True
     idx = sample["idx"]
-    result = compute_visual_entropy(lvlm, sample["img"], sample["question"])
-    log_dict[idx]["visual_entropy"] = result["visual_entropy"]
-    log_dict[idx]["n_visual_tokens"] = result["n_visual_tokens"]
 
     if args.uncertainty == "euq" and lvlm is not None:
         euq_stats = compute_visual_euq_head_statistics(
@@ -140,5 +147,19 @@ def maybe_log_visual_statistics(args, lvlm, sample, log_dict):
         log_dict[idx]["visual_mean_head_ignorance_value"] = euq_stats[
             "visual_mean_head_ignorance_value"
         ]
+        log_dict[idx]["n_visual_tokens"] = euq_stats["n_visual_tokens"]
+        if log_per_image:
+            log_dict[idx]["visual_token_head_conflict_values"] = euq_stats[
+                "visual_token_head_conflict_values"
+            ]
+            log_dict[idx]["visual_token_head_ignorance_values"] = euq_stats[
+                "visual_token_head_ignorance_values"
+            ]
+        return euq_stats
 
+    result = compute_visual_entropy(lvlm, sample["img"], sample["question"])
+    log_dict[idx]["visual_entropy"] = result["visual_entropy"]
+    log_dict[idx]["n_visual_tokens"] = result["n_visual_tokens"]
+    if log_per_image:
+        log_dict[idx]["visual_token_entropies"] = result["visual_token_entropies"]
     return result

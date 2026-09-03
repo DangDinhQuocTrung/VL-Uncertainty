@@ -29,6 +29,6 @@ export TORCH_HOME=${ROOT_DIR}/cache
 export CUDA_VISIBLE_DEVICES=0
 cd ${USER_DIR}/VL-Uncertainty
 
-python3 main.py --uncertainty semantic_entropy_nli
-python3 main.py --uncertainty euq
+# python3 main.py --uncertainty semantic_entropy_nli --compute_visual_statistics True
+python3 main.py --uncertainty euq --compute_visual_statistics True
 python3 update_llm_judge.py --dataset ViLP

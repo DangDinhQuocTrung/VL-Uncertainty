@@ -110,6 +110,42 @@ class Qwen2FVL:
             return_tensors="pt",
         ).to(self.device)
 
+    def _merge_vision_to_embeds(self, inputs):
+        """Encode vision once and bake features into inputs_embeds.
+
+        Beam search / multi-sequence sampling expands pixel_values by N, which
+        re-runs the eager vision encoder N times and OOMs on Qwen2.5-VL.
+        Expanding inputs_embeds is cheap; keep image_grid_thw for RoPE.
+        """
+        input_ids = inputs["input_ids"]
+        pixel_values = inputs.get("pixel_values", None)
+        image_grid_thw = inputs.get("image_grid_thw", None)
+        if pixel_values is None:
+            return inputs
+
+        model = self.model
+        with torch.inference_mode():
+            inputs_embeds = model.model.embed_tokens(input_ids)
+            image_embeds = model.visual(
+                pixel_values.type(model.visual.dtype),
+                grid_thw=image_grid_thw,
+            )
+            n_image_tokens = (input_ids == model.config.image_token_id).sum().item()
+            if n_image_tokens != image_embeds.shape[0]:
+                raise ValueError(
+                    "Image features and image tokens do not match: "
+                    f"tokens: {n_image_tokens}, features {image_embeds.shape[0]}"
+                )
+            mask = input_ids == model.config.image_token_id
+            mask_expanded = mask.unsqueeze(-1).expand_as(inputs_embeds)
+            image_embeds = image_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
+            inputs_embeds = inputs_embeds.masked_scatter(mask_expanded, image_embeds)
+
+        merged = {k: v for k, v in inputs.items()}
+        merged["inputs_embeds"] = inputs_embeds
+        merged.pop("pixel_values", None)
+        return merged
+
     def generate(
         self,
         image,
@@ -152,17 +188,24 @@ class Qwen2FVL:
             diversity_penalty=diversity_penalty,
             length_penalty=length_penalty,
         )
+        # Avoid N× vision encode when HF expands inputs for beams / multi-sample.
+        num_return = gen_kwargs.get("num_return_sequences", 1)
+        if num_beams > 1 or num_return > 1:
+            inputs = self._merge_vision_to_embeds(inputs)
+
+        # return_mode: 0=EUQ hooks, 1=sequences+scores, 2=+attentions/hidden_states
+        need_attn_states = return_more and return_mode == 2
         outputs = self.model.generate(
             **inputs,
             max_new_tokens=64,
             output_scores=return_more,
-            output_attentions=return_more and return_mode == 1,
-            output_hidden_states=return_more and return_mode == 1,
+            output_attentions=need_attn_states,
+            output_hidden_states=need_attn_states,
             return_dict_in_generate=return_more,
             generation_config=GenerationConfig(**gen_kwargs),
         )
         generated_ids = outputs["sequences"] if return_more else outputs
-        prompt_len = inputs.input_ids.shape[-1]
+        prompt_len = inputs["input_ids"].shape[-1]
         generated_ids_trimmed = [out_ids[prompt_len:] for out_ids in generated_ids]
         answers = self.processor.batch_decode(
             generated_ids_trimmed,
@@ -185,6 +228,6 @@ class Qwen2FVL:
 
         if return_more and return_mode == 0:
             return answer, down_proj_features, llm_head_features
-        elif return_more and return_mode == 1:
+        elif return_more and return_mode in (1, 2):
             return answer, inputs, outputs, answers
         return answer

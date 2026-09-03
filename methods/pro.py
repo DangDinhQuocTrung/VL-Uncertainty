@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 
-from methods.beam_utils import generate_beam_candidates
+from methods.beam_utils import generate_beam_candidates, generate_greedy_answer
 from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
 from utils.constants import is_choice_question
 
@@ -31,9 +31,12 @@ def compute_pro_score(probs, alpha=0.4):
 
 def estimate_uncertainty_by_pro(args, lvlm, sample, llm, log_dict):
     pro_alpha = getattr(args, "pro_alpha", 0.4)
+
+    # Main answer: greedy / inference-temp (aligned with VAUQ).
+    answer = generate_greedy_answer(args, lvlm, sample)
+    # Uncertainty: beam candidates only.
     beam = generate_beam_candidates(args, lvlm, sample)
 
-    answer = beam["answer"]
     log_dict[sample["idx"]]["answer"] = answer
     log_dict[sample["idx"]]["answer_sampling_list"] = beam["answers"]
     log_dict[sample["idx"]]["beam_nlls"] = beam["nlls"]

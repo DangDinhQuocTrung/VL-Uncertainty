@@ -10,8 +10,13 @@ EUQ:
   - Split by visual-token mean head conflict / ignorance
   - Plot those EUQ scores, or semantic entropy if --reference_log is an SE log
 
+Also reports detection AUROC on the full valid test set using the same visual
+scores used for grouping (plots themselves may use incorrect answers only):
+  - SE:  visual_entropy
+  - EUQ: visual_mean_head_conflict_value / visual_mean_head_ignorance_value
+
 Example:
-  python interpretability/plot_visual_certainty_se.py \\
+  python plotting/plot_visual_certainty_se.py \\
       --log exp/log_euq.json \\
       --reference_log exp/log_semantic_entropy.json \\
       --percentile 0.2 \\
@@ -27,8 +32,21 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
+from torchmetrics.functional import auroc
 
-from utils.constants import DETECTION_AUROC_KEYS, LOG_META_KEYS
+from utils.constants import (
+    DETECTION_AUROC_KEYS,
+    LOG_META_KEYS,
+    PERTURBATION_DETECTION_DATASETS,
+)
+
+
+EUQ_AUROC_SPECS = (
+    ("visual_mean_head_conflict_value", "Visual Mean Head Conflict"),
+    ("visual_mean_head_ignorance_value", "Visual Mean Head Ignorance"),
+)
+SE_AUROC_SPECS = (("visual_entropy", r"Visual Entropy ($H_{vis}$)"),)
 
 
 def load_log(log_path: str) -> Dict[str, Any]:
@@ -78,7 +96,6 @@ def load_samples(log: Dict[str, Any], method: str) -> List[Dict[str, Any]]:
         required = ("visual_entropy", "uncertainty")
     elif method == "euq":
         required = (
-            "visual_entropy",
             "visual_mean_head_conflict_value",
             "visual_mean_head_ignorance_value",
         )
@@ -93,10 +110,11 @@ def load_samples(log: Dict[str, Any], method: str) -> List[Dict[str, Any]]:
             continue
         sample = {
             "idx": int(key) if str(key).isdigit() else key,
-            "visual_entropy": float(value["visual_entropy"]),
             "flag_answer_correct": bool(value.get("flag_answer_correct", True)),
+            "flag_perturbed_inputs": value.get("flag_perturbed_inputs"),
         }
         if method == "semantic_entropy":
+            sample["visual_entropy"] = float(value["visual_entropy"])
             sample["uncertainty"] = float(value["uncertainty"])
         else:
             sample["visual_mean_head_conflict_value"] = float(
@@ -158,6 +176,76 @@ def attach_reference_uncertainty(
         f"Using reference uncertainty for {len(merged)} overlapping samples."
     )
     return merged
+
+
+def infer_detection_mode(log: Dict[str, Any]) -> Tuple[str, bool]:
+    """Return (detection_label, is_perturbation_detection)."""
+    dataset = log.get("dataset_name")
+    if dataset is None:
+        args_str = str(log.get("args", ""))
+        for name in PERTURBATION_DETECTION_DATASETS:
+            if f"benchmark='{name}'" in args_str or f'benchmark="{name}"' in args_str:
+                dataset = name
+                break
+    is_perturbation = dataset in PERTURBATION_DETECTION_DATASETS
+    label = "Perturbation detection" if is_perturbation else "Hallucination detection"
+    return label, is_perturbation
+
+
+def auroc_specs_for_method(method: str) -> Tuple[Tuple[str, str], ...]:
+    if method == "euq":
+        return EUQ_AUROC_SPECS
+    if method == "semantic_entropy":
+        return SE_AUROC_SPECS
+    raise ValueError(f"Unsupported method: {method}")
+
+
+def compute_visual_statistics_auroc(
+    samples: List[Dict[str, Any]],
+    log: Dict[str, Any],
+    method: str,
+) -> None:
+    """Print detection AUROC for visual statistics on the full valid sample set."""
+    detection_label, is_perturbation = infer_detection_mode(log)
+    auroc_specs = auroc_specs_for_method(method)
+
+    if is_perturbation:
+        missing = [s["idx"] for s in samples if s.get("flag_perturbed_inputs") is None]
+        if missing:
+            raise ValueError(
+                "Perturbation detection requires flag_perturbed_inputs, "
+                f"missing on samples: {missing[:5]}{'...' if len(missing) > 5 else ''}"
+            )
+        detection_gt = torch.tensor(
+            [bool(s["flag_perturbed_inputs"]) for s in samples], dtype=torch.int
+        )
+    else:
+        # Higher visual score should rank incorrect answers higher.
+        detection_gt = torch.tensor(
+            [not s["flag_answer_correct"] for s in samples], dtype=torch.int
+        )
+
+    n_pos = int(detection_gt.sum().item())
+    n_neg = int(len(samples) - n_pos)
+    print(
+        f"{detection_label} AUROC from visual statistics "
+        f"(full valid set, n={len(samples)}, pos={n_pos}, neg={n_neg}):"
+    )
+    logged = log.get(f"{detection_label} AUROC")
+    if logged is not None:
+        print(f"  logged uncertainty AUROC: {float(logged):.4f}")
+
+    if detection_gt.unique().numel() < 2:
+        print("  (undefined; need both positive and negative labels)")
+        return
+
+    for field, label in auroc_specs:
+        if any(field not in s for s in samples):
+            print(f"  {label} ({field}): (missing in log)")
+            continue
+        scores = torch.tensor([s[field] for s in samples], dtype=torch.float)
+        score = float(auroc(scores, detection_gt, task="binary").item())
+        print(f"  {label} ({field}): {score:.4f}")
 
 
 def split_by_visual_certainty(
@@ -348,6 +436,7 @@ def main():
     method = detect_method(log)
     print(f"Detected method: {method}")
     samples = load_samples(log, method)
+    compute_visual_statistics_auroc(samples, log, method)
     if use_reference:
         samples = attach_reference_uncertainty(
             samples, load_uncertainty_by_idx(reference_log)

@@ -168,14 +168,16 @@ class LLaVAMed1F:
             diversity_penalty=diversity_penalty,
             length_penalty=length_penalty,
         )
+        # return_mode: 0=EUQ hooks, 1=sequences+scores, 2=+attentions/hidden_states
+        need_attn_states = return_more and return_mode == 2
         outputs = self.model.generate(
             inputs["input_ids"],
             images=inputs["images"],
             image_sizes=inputs["image_sizes"],
             max_new_tokens=64,
             output_scores=return_more,
-            output_attentions=return_more and return_mode == 1,
-            output_hidden_states=return_more and return_mode == 1,
+            output_attentions=need_attn_states,
+            output_hidden_states=need_attn_states,
             return_dict_in_generate=return_more,
             use_cache=True,
             generation_config=GenerationConfig(**gen_kwargs),
@@ -198,6 +200,6 @@ class LLaVAMed1F:
 
         if return_more and return_mode == 0:
             return answer, down_proj_features, llm_head_features
-        elif return_more and return_mode == 1:
+        elif return_more and return_mode in (1, 2):
             return answer, inputs, outputs, answers
         return answer

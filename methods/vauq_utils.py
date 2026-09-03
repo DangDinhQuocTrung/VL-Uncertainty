@@ -7,9 +7,11 @@ def _layer_range_for_lvlm(lvlm_type):
     name = str(lvlm_type).lower()
     if "llava" in name:
         return [10, 25]
-    if "qwen" in name:
+    elif "qwen2.5" in name:
+        return [10, 25]
+    elif "qwen" in name:
         return [20, 40]
-    if "gemma" in name:
+    elif "gemma" in name:
         return [20, 33]
     raise ValueError(f"Unsupported model: {lvlm_type}")
 

@@ -7,6 +7,15 @@ import torch
 import torch.nn.functional as F
 
 
+def generate_greedy_answer(args, lvlm, sample):
+    """Greedy / inference-temp decode used as the shared main answer (like VAUQ)."""
+    return lvlm.generate(
+        sample["img"],
+        sample["question"],
+        args.inference_temp,
+    )
+
+
 def generate_beam_candidates(args, lvlm, sample):
     """Generate num_beams answers with sequence NLLs/probs via beam search.
 
@@ -53,6 +62,9 @@ def generate_temperature_samples(args, lvlm, sample):
 
     N defaults to sampling_time if > 0, else num_beams.
     Temperature defaults to sampling_temp if > 0, else 1.0.
+
+    Samples are drawn sequentially (batch size 1). Batched num_return_sequences
+    tiles vision inputs and OOMs on Qwen2.5-VL with eager attention.
     """
     n_samples = getattr(args, "sampling_time", 0)
     if n_samples is None or n_samples <= 0:
@@ -61,23 +73,41 @@ def generate_temperature_samples(args, lvlm, sample):
     if temp is None or temp <= 0.0:
         temp = 1.0
 
-    answer, inputs, outputs, answers = lvlm.generate(
-        sample["img"],
-        sample["question"],
-        temp,
-        return_more=True,
-        return_mode=1,
-        num_beams=1,
-        num_return_sequences=n_samples,
-        num_beam_groups=1,
-        diversity_penalty=0.0,
-        length_penalty=1.0,
-    )
+    answers = []
+    nlls = []
+    avg_nlls = []
+    last_inputs = None
+    last_outputs = None
+    stop_token_ids = None
 
-    stop_token_ids = _stop_token_ids_from_lvlm(lvlm, outputs)
-    nlls, avg_nlls = sequence_nlls_from_sample_outputs(
-        inputs, outputs, stop_token_ids=stop_token_ids
-    )
+    for _ in range(n_samples):
+        # return_mode=1: sequences + scores only (no attentions/hidden_states).
+        _, inputs, outputs, sample_answers = lvlm.generate(
+            sample["img"],
+            sample["question"],
+            temp,
+            return_more=True,
+            return_mode=1,
+            num_beams=1,
+            num_return_sequences=1,
+            num_beam_groups=1,
+            diversity_penalty=0.0,
+            length_penalty=1.0,
+        )
+        if stop_token_ids is None:
+            stop_token_ids = _stop_token_ids_from_lvlm(lvlm, outputs)
+        sample_nlls, sample_avg_nlls = sequence_nlls_from_sample_outputs(
+            inputs, outputs, stop_token_ids=stop_token_ids
+        )
+        answers.extend(sample_answers)
+        nlls.extend(sample_nlls)
+        avg_nlls.extend(sample_avg_nlls)
+        last_inputs, last_outputs = inputs, outputs
+        # Free large score tensors before the next sample.
+        del outputs
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
     # Clamp non-finite NLLs so weighted RDS stays well-defined.
     nlls = [nll if math.isfinite(nll) else 1e6 for nll in nlls]
     avg_nlls = [nll if math.isfinite(nll) else 1e6 for nll in avg_nlls]
@@ -87,8 +117,8 @@ def generate_temperature_samples(args, lvlm, sample):
     return {
         "answer": answer,
         "answers": list(answers),
-        "inputs": inputs,
-        "outputs": outputs,
+        "inputs": last_inputs,
+        "outputs": last_outputs,
         "nlls": nlls,
         "avg_nlls": avg_nlls,
         "probs": probs,

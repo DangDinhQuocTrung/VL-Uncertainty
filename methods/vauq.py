@@ -16,9 +16,18 @@ def compute_entropy(outputs):
     return mean_entropy
 
 
-def generate_with_masked_visual_tokens(model, inputs, top_k_visual_positions, model_type="llava"):
+def generate_with_masked_visual_tokens(
+    model,
+    inputs,
+    top_k_visual_positions,
+    visual_token_positions,
+    model_type="llava",
+    blur_key_regions=True,
+):
     if "llava" in model_type.lower():
         model_type = "llava"
+    elif "qwen2.5" in model_type.lower():
+        model_type = "qwen2.5"
     elif "qwen" in model_type.lower():
         model_type = "qwen"
     elif "gemma" in model_type.lower():
@@ -26,16 +35,31 @@ def generate_with_masked_visual_tokens(model, inputs, top_k_visual_positions, mo
     else:
         raise ValueError(f"Unsupported model: {model_type}")
 
+    top_k_visual_positions = top_k_visual_positions.to(dtype=torch.long)
+    visual_token_positions = visual_token_positions.to(dtype=torch.long)
+    if blur_key_regions:
+        # Ablate key (top-K) visual tokens.
+        positions_to_zero = top_k_visual_positions
+    else:
+        # Keep top-K; ablate the remaining visual tokens.
+        keep = torch.isin(visual_token_positions, top_k_visual_positions)
+        positions_to_zero = visual_token_positions[~keep]
+
     # better: hook the input to layer 0 using register_forward_pre_hook
     def pre_hook(module, input_):
         # input_ is a tuple, first element is hidden states
         hidden_states = input_[0]
-        if hidden_states.shape[1] > top_k_visual_positions.shape[0]:
-            hidden_states[:, top_k_visual_positions, :] = 0.0
+        if positions_to_zero.numel() == 0:
+            return input_
+        pos = positions_to_zero.to(hidden_states.device)
+        if hidden_states.shape[1] > int(pos.max().item()):
+            hidden_states[:, pos, :] = 0.0
         return (hidden_states,) + input_[1:]
 
     if model_type == "llava":
         layer_0 = model.model.language_model.model.layers[0]
+    elif model_type == "qwen2.5":
+        layer_0 = model.model.model.layers[0]
     elif model_type == "qwen":
         layer_0 = model.model.model.language_model.layers[0]
     elif model_type == "gemma":
@@ -61,10 +85,10 @@ def generate_with_masked_visual_tokens(model, inputs, top_k_visual_positions, mo
             .split("ASSISTANT: ")[-1]
             .strip()
         )
-    elif model_type == "qwen":
+    elif model_type in ["qwen", "qwen2.5"]:
         generated_ids = outputs["sequences"]
         generated_ids_trimmed = [
-            out_ids[len(in_ids) :]
+            out_ids[len(in_ids):]
             for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
         ]
         answer = model.processor.batch_decode(
@@ -92,7 +116,8 @@ def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
         sample["question"],
         args.inference_temp,
         return_more=True,
-        return_mode=1,
+        return_mode=2,
+        # needs attentions over visual tokens
     )
     log_dict[sample["idx"]]["answer"] = answer
     flag_answer_correct = True
@@ -111,14 +136,22 @@ def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
     image_token_id, visual_token_positions, visual_token_start_index, visual_token_end_index, sum_attention_over_visual_tokens, _ = compute_attention_over_visual_tokens(
         lvlm.model, lvlm.processor, inputs, outputs, args.lvlm, device)
 
-    # Masking
+    # Masking: blur_key_regions=True zeros top-K; False keeps top-K and zeros the rest.
+    blur_key_regions = getattr(args, "blur_key_regions", True)
     top_k_indices = torch.topk(sum_attention_over_visual_tokens, K).indices
     top_k_visual_token_positions = visual_token_positions[top_k_indices]
     masked_answer, outputs_with_masked_visual_tokens = generate_with_masked_visual_tokens(
-        lvlm, inputs, top_k_visual_token_positions, args.lvlm)
+        lvlm,
+        inputs,
+        top_k_visual_token_positions,
+        visual_token_positions,
+        args.lvlm,
+        blur_key_regions=blur_key_regions,
+    )
     masked_entropy = compute_entropy(outputs_with_masked_visual_tokens).item()
 
     # Log the results
+    log_dict[sample["idx"]]["blur_key_regions"] = blur_key_regions
     log_dict[sample["idx"]]["masked_answer"] = masked_answer
     log_dict[sample["idx"]]["clean_entropy"] = clean_entropy
     log_dict[sample["idx"]]["masked_entropy"] = masked_entropy

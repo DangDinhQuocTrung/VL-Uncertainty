@@ -44,7 +44,8 @@ def estimate_uncertainty_by_svar(args, model_manager, sample, llm, log_dict):
             sample["question"],
             args.inference_temp,
             return_more=True,
-            return_mode=1,
+            return_mode=2,
+            # needs attentions + hidden_states
         )
         tokenizer = getattr(model_manager.processor, "tokenizer", model_manager.processor)
         vision_token_start, vision_token_end = _get_vision_token_span(

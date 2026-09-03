@@ -80,7 +80,7 @@ def parse_args():
     parser.add_argument(
         "--uncertainty",
         type=str,
-        default="euq",
+        default="vse",
         help=(
             "Uncertainty method. You can also use combined aliases like "
             "nll_max, nll_avg, rds_base, rds_weighted, rds_eigenembed, "
@@ -187,7 +187,7 @@ def parse_args():
     parser.add_argument(
         "--compute_visual_statistics",
         type=lambda x: x.lower() == "true",
-        default="True",
+        default="False",
         help=(
             "If true, compute visual interpretability statistics on the original "
             "image: H_vis for semantic_entropy; H_vis plus visual-token mean head "
@@ -199,6 +199,15 @@ def parse_args():
     parser.add_argument("--visual_perturbation", type=str, default="blurring")
     parser.add_argument(
         "--blur_radius_list", type=float, nargs="+", default=[0.6, 0.8, 1.0, 1.2, 1.4]
+    )
+    parser.add_argument(
+        "--blur_key_regions",
+        type=lambda x: x.lower() == "true",
+        default="True",
+        help=(
+            "VAUQ masking: True zeros top-K attended visual tokens; "
+            "False keeps top-K and zeros the remaining visual tokens."
+        ),
     )
     parser.add_argument("--textual_perturbation", type=str, default="llm_rephrasing")
     parser.add_argument(
@@ -332,7 +341,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     print(f"Benchmark size: {benchmark_size}")
     if args.quick_benchmark:
         # benchmark_size = min(benchmark_size, 33)
-        benchmark_size = min(benchmark_size, 45)
+        benchmark_size = min(benchmark_size, 15)
 
     # Run the benchmark
     split_inference_quantification = 1 if args.uncertainty in ["euq"] else 0
