@@ -222,7 +222,7 @@ def plot_auroc_bar(results, dataset: str, mode: str, output_path: Path, show: bo
     cmap = plt.get_cmap("tab10")
     colors = [cmap(i % 10) for i in range(len(methods))]
 
-    fig, ax = plt.subplots(figsize=(max(8, 1.2 * len(methods) + 2), 5.5))
+    fig, ax = plt.subplots(figsize=(max(8, 1.2 * len(methods) + 2), 7.5))
     x = np.arange(len(methods))
     bars = ax.bar(x, aurocs, width=0.65, color=colors, edgecolor="black", linewidth=0.6)
 
