@@ -19,6 +19,7 @@ for seed in ${seeds[@]}; do
     # bsub -env "SEED=${seed},BENCHMARK=GMAIMMBench,LVLM=medgemma-1.5-4b-it,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=pro,INFERENCE_TEMP=0.0,SAMPLING_TEMP=0.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
     # bsub -env "SEED=${seed},BENCHMARK=GMAIMMBench,LVLM=medgemma-1.5-4b-it,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=rds,INFERENCE_TEMP=0.0,SAMPLING_TEMP=0.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
     # bsub -env "SEED=${seed},BENCHMARK=GMAIMMBench,LVLM=medgemma-1.5-4b-it,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=vse,INFERENCE_TEMP=0.1,SAMPLING_TEMP=1.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
+    bsub -env "SEED=${seed},BENCHMARK=GMAIMMBench,LVLM=medgemma-1.5-4b-it,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=vse_masked,INFERENCE_TEMP=0.1,SAMPLING_TEMP=1.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
 
     # MedVIGIL
     # bsub -env "SEED=${seed},BENCHMARK=MedVIGIL,LVLM=medgemma-1.5-4b-it,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=vl_uncertainty,INFERENCE_TEMP=0.1,SAMPLING_TEMP=1.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
@@ -29,6 +30,7 @@ for seed in ${seeds[@]}; do
     # bsub -env "SEED=${seed},BENCHMARK=MedVIGIL,LVLM=medgemma-1.5-4b-it,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=pro,INFERENCE_TEMP=0.0,SAMPLING_TEMP=0.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
     # bsub -env "SEED=${seed},BENCHMARK=MedVIGIL,LVLM=medgemma-1.5-4b-it,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=rds,INFERENCE_TEMP=0.0,SAMPLING_TEMP=0.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
     # bsub -env "SEED=${seed},BENCHMARK=MedVIGIL,LVLM=medgemma-1.5-4b-it,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=vse,INFERENCE_TEMP=0.1,SAMPLING_TEMP=1.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
+    bsub -env "SEED=${seed},BENCHMARK=MedVIGIL,LVLM=medgemma-1.5-4b-it,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=vse_masked,INFERENCE_TEMP=0.1,SAMPLING_TEMP=1.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
 
     # ViLP
     # bsub -env "SEED=${seed},BENCHMARK=ViLP,LVLM=Qwen2.5-VL-7B-Instruct,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=vl_uncertainty,INFERENCE_TEMP=0.1,SAMPLING_TEMP=1.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
@@ -39,6 +41,7 @@ for seed in ${seeds[@]}; do
     # bsub -env "SEED=${seed},BENCHMARK=ViLP,LVLM=Qwen2.5-VL-7B-Instruct,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=pro,INFERENCE_TEMP=0.0,SAMPLING_TEMP=0.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
     # bsub -env "SEED=${seed},BENCHMARK=ViLP,LVLM=Qwen2.5-VL-7B-Instruct,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=rds,INFERENCE_TEMP=0.0,SAMPLING_TEMP=0.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
     # bsub -env "SEED=${seed},BENCHMARK=ViLP,LVLM=Qwen2.5-VL-7B-Instruct,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=vse,INFERENCE_TEMP=0.1,SAMPLING_TEMP=1.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
+    bsub -env "SEED=${seed},BENCHMARK=ViLP,LVLM=Qwen2.5-VL-7B-Instruct,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=vse_masked,INFERENCE_TEMP=0.1,SAMPLING_TEMP=1.0,SAMPLING_TIME=5" < ./vlu_test_job.sh
 
-    bsub -env "SEED=${seed},BENCHMARK=ViLP,LVLM=Qwen2.5-VL-7B-Instruct,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=vauq,INFERENCE_TEMP=0.0,SAMPLING_TEMP=0.0,SAMPLING_TIME=0" < ./vlu_test_job.sh
+    # bsub -env "SEED=${seed},BENCHMARK=ViLP,LVLM=Qwen2.5-VL-7B-Instruct,USE_MODEL_MANAGER=False,USE_FASTEST=False,LLM=${LLM},UNCERTAINTY=vauq,INFERENCE_TEMP=0.0,SAMPLING_TEMP=0.0,SAMPLING_TIME=0" < ./vlu_test_job.sh
 done

@@ -1,5 +1,5 @@
 #!/bin/bash
-#BSUB -q p1
+#BSUB -q gpua100
 #BSUB -J testing_vlu
 #BSUB -n 8
 #BSUB -gpu "num=1:mode=exclusive_process"
@@ -50,3 +50,4 @@ python3 main.py \
     --inference_temp ${INFERENCE_TEMP} \
     --sampling_temp ${SAMPLING_TEMP} \
     --sampling_time ${SAMPLING_TIME}
+    --blur_key_regions True

@@ -31,6 +31,8 @@ METHOD_DISPLAY = {
     "nll": "NLL",
     "pro": "PRO",
     "rds": "RDS",
+    "vse": "VSE",
+    "vse_masked": "VSE-Masked",
 }
 
 

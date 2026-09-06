@@ -24,6 +24,7 @@ from methods.nll import estimate_uncertainty_by_nll
 from methods.pro import estimate_uncertainty_by_pro
 from methods.rds import estimate_uncertainty_by_rds
 from methods.vse import estimate_uncertainty_by_vse
+from methods.vse_masked import estimate_uncertainty_by_vse_masked
 from utils.metrics import compute_f1_score
 
 warnings.filterwarnings("ignore")
@@ -59,6 +60,8 @@ def normalize_uncertainty_args(args):
         args.uncertainty, args.se_clustering = se_aliases[uncertainty]
     elif uncertainty in ("vse", "visual_semantic_entropy"):
         args.uncertainty = "vse"
+    elif uncertainty in ("vse_masked", "visual_semantic_entropy_masked"):
+        args.uncertainty = "vse_masked"
 
     return args
 
@@ -80,11 +83,11 @@ def parse_args():
     parser.add_argument(
         "--uncertainty",
         type=str,
-        default="vauq",
+        default="vse_masked",
         help=(
             "Uncertainty method. You can also use combined aliases like "
             "nll_max, nll_avg, rds_base, rds_weighted, rds_eigenembed, "
-            "semantic_entropy_nli, or vse."
+            "semantic_entropy_nli, vse, or vse_masked."
         ),
     )
     parser.add_argument("--uncertainty_threshold", type=float, default=1.0)
@@ -185,9 +188,19 @@ def parse_args():
         help="SentenceTransformer model used when --vse_distance cosine.",
     )
     parser.add_argument(
+        "--vse_mask_percents",
+        type=float,
+        nargs="+",
+        default=[10, 20, 30, 40],
+        help=(
+            "For vse_masked: progressive fractions of top-attended visual tokens "
+            "to black out when building the perturbed image list."
+        ),
+    )
+    parser.add_argument(
         "--compute_visual_statistics",
         type=lambda x: x.lower() == "true",
-        default="True",
+        default="False",
         help=(
             "If true, compute visual interpretability statistics: H_vis for "
             "semantic_entropy; visual-token mean head conflict/ignorance for euq; "
@@ -207,6 +220,17 @@ def parse_args():
         help=(
             "VAUQ masking: True zeros top-K attended visual tokens; "
             "False keeps top-K and zeros the remaining visual tokens."
+        ),
+    )
+    parser.add_argument(
+        "--vauq_mask_mode",
+        type=str,
+        default="image",
+        choices=["hook", "image"],
+        help=(
+            "VAUQ ablation backend: 'hook' zeros selected visual-token hidden "
+            "states at layer 0; 'image' blackens those patches in the image and "
+            "re-generates without a hook."
         ),
     )
     parser.add_argument("--textual_perturbation", type=str, default="llm_rephrasing")
@@ -249,7 +273,7 @@ def obtain_lvlm(args):
         lvlm_class = LVLM_MAP.get(args.lvlm)
     if not lvlm_class:
         raise ValueError(f"Unsupported LVLM: {args.lvlm}")
-    use_flash_attention = False if args.uncertainty in ["vauq", "svar"] else True
+    use_flash_attention = False if args.uncertainty in ["vauq", "vse_masked", "svar"] else True
     return lvlm_class(args.lvlm, use_fastest=args.use_fastest, use_flash_attention=use_flash_attention)
 
 
@@ -317,6 +341,8 @@ def handle_single(args, idx, lvlm, benchmark, llm, log_dict):
         estimate_uncertainty_by_rds(args, lvlm, sample, llm, log_dict)
     elif args.uncertainty == "vse":
         estimate_uncertainty_by_vse(args, lvlm, sample, llm, log_dict)
+    elif args.uncertainty == "vse_masked":
+        estimate_uncertainty_by_vse_masked(args, lvlm, sample, llm, log_dict)
     else:
         raise ValueError(f"Unsupported method: {args.uncertainty}")
     return
@@ -341,7 +367,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     print(f"Benchmark size: {benchmark_size}")
     if args.quick_benchmark:
         # benchmark_size = min(benchmark_size, 33)
-        benchmark_size = min(benchmark_size, 10)
+        benchmark_size = min(benchmark_size, 15)
 
     # Run the benchmark
     split_inference_quantification = 1 if args.uncertainty in ["euq"] else 0
