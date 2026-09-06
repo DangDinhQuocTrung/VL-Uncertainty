@@ -3,6 +3,7 @@ import torch.nn.functional as F
 from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
 from utils.constants import is_choice_question
 from methods.vauq_utils import compute_attention_over_visual_tokens
+from utils.visual_statistics import maybe_log_visual_statistics
 
 
 def compute_entropy(outputs):
@@ -140,6 +141,11 @@ def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
     blur_key_regions = getattr(args, "blur_key_regions", True)
     top_k_indices = torch.topk(sum_attention_over_visual_tokens, K).indices
     top_k_visual_token_positions = visual_token_positions[top_k_indices]
+    if blur_key_regions:
+        positions_to_zero = top_k_visual_token_positions
+    else:
+        keep = torch.isin(visual_token_positions, top_k_visual_token_positions)
+        positions_to_zero = visual_token_positions[~keep]
     masked_answer, outputs_with_masked_visual_tokens = generate_with_masked_visual_tokens(
         lvlm,
         inputs,
@@ -167,4 +173,9 @@ def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
         not log_dict[sample["idx"]]["flag_answer_correct"] and flag_predict_hallucination
     )
     log_dict[sample["idx"]]["flag_detection_correct"] = flag_detection_correct
+
+    # Visual stats on the VAUQ-masked input (H_vis + EUQ head conflict/ignorance).
+    maybe_log_visual_statistics(
+        args, lvlm, sample, log_dict, positions_to_zero=positions_to_zero
+    )
     return log_dict

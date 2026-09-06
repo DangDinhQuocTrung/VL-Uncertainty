@@ -1,9 +1,9 @@
 #!/bin/bash
-#BSUB -q gpua100
+#BSUB -q p1
 #BSUB -J testing_vlu
 #BSUB -n 8
 #BSUB -gpu "num=1:mode=exclusive_process"
-#BSUB -W 09:50
+#BSUB -W 15:50
 #BSUB -R "rusage[mem=16GB]"
 #BSUB -R "span[hosts=1]"
 #BSUB -u dida@dtu.dk

@@ -80,7 +80,7 @@ def parse_args():
     parser.add_argument(
         "--uncertainty",
         type=str,
-        default="vse",
+        default="vauq",
         help=(
             "Uncertainty method. You can also use combined aliases like "
             "nll_max, nll_avg, rds_base, rds_weighted, rds_eigenembed, "
@@ -187,11 +187,11 @@ def parse_args():
     parser.add_argument(
         "--compute_visual_statistics",
         type=lambda x: x.lower() == "true",
-        default="False",
+        default="True",
         help=(
-            "If true, compute visual interpretability statistics on the original "
-            "image: H_vis for semantic_entropy; H_vis plus visual-token mean head "
-            "conflict/ignorance for euq."
+            "If true, compute visual interpretability statistics: H_vis for "
+            "semantic_entropy; visual-token mean head conflict/ignorance for euq; "
+            "both on the VAUQ-masked visual input for vauq."
         ),
     )
 
@@ -341,7 +341,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     print(f"Benchmark size: {benchmark_size}")
     if args.quick_benchmark:
         # benchmark_size = min(benchmark_size, 33)
-        benchmark_size = min(benchmark_size, 15)
+        benchmark_size = min(benchmark_size, 10)
 
     # Run the benchmark
     split_inference_quantification = 1 if args.uncertainty in ["euq"] else 0

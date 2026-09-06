@@ -10,10 +10,15 @@ EUQ:
   - Split by visual-token mean head conflict / ignorance
   - Plot those EUQ scores, or semantic entropy if --reference_log is an SE log
 
+VAUQ:
+  - Logs both H_vis and EUQ visual scores (on the VAUQ-masked input)
+  - Emits three figures: se, euq_conflict, euq_ignorance
+
 Also reports detection AUROC on the full valid test set using the same visual
 scores used for grouping (plots themselves may use incorrect answers only):
   - SE:  visual_entropy
   - EUQ: visual_mean_head_conflict_value / visual_mean_head_ignorance_value
+  - VAUQ: all three of the above
 
 Example:
   python plotting/plot_visual_certainty_se.py \\
@@ -47,6 +52,7 @@ EUQ_AUROC_SPECS = (
     ("visual_mean_head_ignorance_value", "Visual Mean Head Ignorance"),
 )
 SE_AUROC_SPECS = (("visual_entropy", r"Visual Entropy ($H_{vis}$)"),)
+VAUQ_AUROC_SPECS = SE_AUROC_SPECS + EUQ_AUROC_SPECS
 
 
 def load_log(log_path: str) -> Dict[str, Any]:
@@ -77,9 +83,11 @@ def detect_method(log: Dict[str, Any]) -> str:
         return "semantic_entropy"
     if method == "euq":
         return "euq"
+    if method == "vauq":
+        return "vauq"
     raise ValueError(
         f"Unsupported uncertainty_method '{log.get('uncertainty_method')}'. "
-        "Expected semantic_entropy or euq."
+        "Expected semantic_entropy, euq, or vauq."
     )
 
 
@@ -99,6 +107,13 @@ def load_samples(log: Dict[str, Any], method: str) -> List[Dict[str, Any]]:
             "visual_mean_head_conflict_value",
             "visual_mean_head_ignorance_value",
         )
+    elif method == "vauq":
+        required = (
+            "visual_entropy",
+            "visual_mean_head_conflict_value",
+            "visual_mean_head_ignorance_value",
+            "uncertainty",
+        )
     else:
         raise ValueError(f"Unsupported method: {method}")
 
@@ -113,10 +128,10 @@ def load_samples(log: Dict[str, Any], method: str) -> List[Dict[str, Any]]:
             "flag_answer_correct": bool(value.get("flag_answer_correct", True)),
             "flag_perturbed_inputs": value.get("flag_perturbed_inputs"),
         }
-        if method == "semantic_entropy":
+        if method in ("semantic_entropy", "vauq"):
             sample["visual_entropy"] = float(value["visual_entropy"])
             sample["uncertainty"] = float(value["uncertainty"])
-        else:
+        if method in ("euq", "vauq"):
             sample["visual_mean_head_conflict_value"] = float(
                 value["visual_mean_head_conflict_value"]
             )
@@ -197,6 +212,8 @@ def auroc_specs_for_method(method: str) -> Tuple[Tuple[str, str], ...]:
         return EUQ_AUROC_SPECS
     if method == "semantic_entropy":
         return SE_AUROC_SPECS
+    if method == "vauq":
+        return VAUQ_AUROC_SPECS
     raise ValueError(f"Unsupported method: {method}")
 
 
@@ -366,7 +383,97 @@ def _default_out_path(method: str, metric: str, out: Optional[str]) -> str:
         return f"{stem}_{metric}{ext}"
     if method == "semantic_entropy":
         return "exp/fig_visual_certainty_se.png"
+    if method == "vauq":
+        return f"exp/fig_visual_certainty_vauq_{metric}.png"
     return f"exp/fig_visual_certainty_euq_{metric}.png"
+
+
+def _plot_se_style(
+    samples: List[Dict[str, Any]],
+    args,
+    subset: str,
+    method: str,
+    value_xlabel: Optional[str],
+    title_override: Optional[str] = None,
+):
+    values_conf, values_unc, stats = split_by_visual_certainty(
+        samples,
+        value_key="uncertainty",
+        split_key="visual_entropy",
+        percentile=args.percentile,
+        incorrect_only=args.incorrect_only,
+    )
+    print("Split stats (visual_entropy):")
+    for k, v in stats.items():
+        print(f"  {k}: {v}")
+
+    title = title_override or (
+        args.title
+        or f"{'VAUQ Uncertainty' if method == 'vauq' else 'Semantic Entropy'} "
+        f"by Visual Certainty ({subset})"
+    )
+    out_path = _default_out_path(method, "se", args.out)
+    plot_distributions(
+        values_conf,
+        values_unc,
+        stats,
+        out_path,
+        xlabel=value_xlabel or (
+            "VAUQ Uncertainty" if method == "vauq" else "Semantic Entropy"
+        ),
+        group_labels=(
+            "Visually Confident (low $H_{vis}$)",
+            "Visually Uncertain (high $H_{vis}$)",
+        ),
+        title=title,
+    )
+
+
+def _plot_euq_style(
+    samples: List[Dict[str, Any]],
+    args,
+    subset: str,
+    method: str,
+    plot_uncertainty: bool,
+    suffix_prefix: str = "",
+):
+    for metric_key, metric_label in (
+        ("visual_mean_head_conflict_value", "Visual Mean Head Conflict"),
+        ("visual_mean_head_ignorance_value", "Visual Mean Head Ignorance"),
+    ):
+        value_key = "uncertainty" if plot_uncertainty else metric_key
+        values_conf, values_unc, stats = split_by_visual_certainty(
+            samples,
+            value_key=value_key,
+            split_key=metric_key,
+            percentile=args.percentile,
+            incorrect_only=args.incorrect_only,
+        )
+        print(f"Split stats ({metric_key}):")
+        for k, v in stats.items():
+            print(f"  {k}: {v}")
+
+        base = "conflict" if "conflict" in metric_key else "ignorance"
+        suffix = f"{suffix_prefix}{base}" if suffix_prefix else base
+        out_path = _default_out_path(method, suffix, args.out)
+        if plot_uncertainty:
+            xlabel = "Semantic Entropy"
+            title = f"Semantic Entropy by {metric_label} ({subset})"
+        else:
+            xlabel = metric_label
+            title = f"{metric_label} by Visual Certainty ({subset})"
+        plot_distributions(
+            values_conf,
+            values_unc,
+            stats,
+            out_path,
+            xlabel=xlabel,
+            group_labels=(
+                f"Low {metric_label}",
+                f"High {metric_label}",
+            ),
+            title=title,
+        )
 
 
 def parse_args():
@@ -405,15 +512,15 @@ def parse_args():
         type=str,
         default=None,
         help=(
-            "Output figure path. For euq, conflict/ignorance plots use stem_conflict "
-            "and stem_ignorance suffixes."
+            "Output figure path. For euq/vauq, metric plots use stem suffixes "
+            "(se / conflict|euq_conflict / ignorance|euq_ignorance)."
         ),
     )
     parser.add_argument(
         "--title",
         type=str,
         default=None,
-        help="Optional figure title override (semantic_entropy only).",
+        help="Optional figure title override (semantic_entropy / vauq se plot only).",
     )
     return parser.parse_args()
 
@@ -447,69 +554,55 @@ def main():
     value_xlabel = "Semantic Entropy" if plot_uncertainty else None
 
     if method == "semantic_entropy":
-        values_conf, values_unc, stats = split_by_visual_certainty(
-            samples,
-            value_key="uncertainty",
-            split_key="visual_entropy",
-            percentile=args.percentile,
-            incorrect_only=args.incorrect_only,
-        )
-        print("Split stats:")
-        for k, v in stats.items():
-            print(f"  {k}: {v}")
-
-        title = args.title or f"Semantic Entropy by Visual Certainty ({subset})"
-        out_path = _default_out_path(method, "se", args.out)
-        plot_distributions(
-            values_conf,
-            values_unc,
-            stats,
-            out_path,
-            xlabel=value_xlabel or "Semantic Entropy",
-            group_labels=(
-                "Visually Confident (low $H_{vis}$)",
-                "Visually Uncertain (high $H_{vis}$)",
-            ),
-            title=title,
-        )
+        _plot_se_style(samples, args, subset, method, value_xlabel)
         return
 
-    for metric_key, metric_label in (
-        ("visual_mean_head_conflict_value", "Visual Mean Head Conflict"),
-        ("visual_mean_head_ignorance_value", "Visual Mean Head Ignorance"),
-    ):
-        value_key = "uncertainty" if plot_uncertainty else metric_key
-        values_conf, values_unc, stats = split_by_visual_certainty(
-            samples,
-            value_key=value_key,
-            split_key=metric_key,
-            percentile=args.percentile,
-            incorrect_only=args.incorrect_only,
-        )
-        print(f"Split stats ({metric_key}):")
-        for k, v in stats.items():
-            print(f"  {k}: {v}")
-
-        suffix = "conflict" if "conflict" in metric_key else "ignorance"
-        out_path = _default_out_path(method, suffix, args.out)
+    if method == "vauq":
+        # Three figures: se, euq_conflict, euq_ignorance.
+        _plot_se_style(samples, args, subset, method, value_xlabel)
         if plot_uncertainty:
-            xlabel = "Semantic Entropy"
-            title = f"Semantic Entropy by {metric_label} ({subset})"
+            _plot_euq_style(
+                samples,
+                args,
+                subset,
+                method,
+                plot_uncertainty=True,
+                suffix_prefix="euq_",
+            )
         else:
-            xlabel = metric_label
-            title = f"{metric_label} by Visual Certainty ({subset})"
-        plot_distributions(
-            values_conf,
-            values_unc,
-            stats,
-            out_path,
-            xlabel=xlabel,
-            group_labels=(
-                f"Low {metric_label}",
-                f"High {metric_label}",
-            ),
-            title=title,
-        )
+            for metric_key, metric_label in (
+                ("visual_mean_head_conflict_value", "Visual Mean Head Conflict"),
+                ("visual_mean_head_ignorance_value", "Visual Mean Head Ignorance"),
+            ):
+                values_conf, values_unc, stats = split_by_visual_certainty(
+                    samples,
+                    value_key="uncertainty",
+                    split_key=metric_key,
+                    percentile=args.percentile,
+                    incorrect_only=args.incorrect_only,
+                )
+                print(f"Split stats ({metric_key}):")
+                for k, v in stats.items():
+                    print(f"  {k}: {v}")
+                suffix = (
+                    "euq_conflict" if "conflict" in metric_key else "euq_ignorance"
+                )
+                out_path = _default_out_path(method, suffix, args.out)
+                plot_distributions(
+                    values_conf,
+                    values_unc,
+                    stats,
+                    out_path,
+                    xlabel="VAUQ Uncertainty",
+                    group_labels=(
+                        f"Low {metric_label}",
+                        f"High {metric_label}",
+                    ),
+                    title=f"VAUQ Uncertainty by {metric_label} ({subset})",
+                )
+        return
+
+    _plot_euq_style(samples, args, subset, method, plot_uncertainty)
 
 
 if __name__ == "__main__":
