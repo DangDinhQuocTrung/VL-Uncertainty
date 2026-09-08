@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 
-from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
+from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm, evaluate_multiple_choice_answer_correctness
 from utils.constants import is_choice_question
 from methods.vauq_utils import compute_attention_over_visual_tokens
 from utils.visual_statistics import maybe_log_visual_statistics
@@ -282,10 +282,10 @@ def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
     log_dict[sample["idx"]]["answer"] = answer
     flag_answer_correct = True
     if is_choice_question(args, sample):
-        flag_answer_correct = str(sample["gt_answer"]) in answer
+        flag_answer_correct, llm_answer_check = evaluate_multiple_choice_answer_correctness(llm, sample, answer)
     else:
         flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(llm, sample, answer)
-        log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
+    log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
     log_dict[sample["idx"]]["flag_answer_correct"] = flag_answer_correct
     log_dict[sample["idx"]]["answer_sampling_list"] = [answer]
 

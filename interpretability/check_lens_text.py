@@ -6,7 +6,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from interpretability.scopes_lens_utils import load_model, get_num_layers, get_transformer_layers, get_post_hook, logit_lens_on_token
 
 
-MODEL_NAME = "google/gemma-3-12b-it"
+# MODEL_NAME = "google/gemma-3-12b-it"
+MODEL_NAME = "Qwen/Qwen2.5-VL-7B-Instruct"
 
 
 def check_lens():
@@ -49,7 +50,10 @@ def check_lens():
     print()
 
     # Loading mappings
-    weight_dir = Path("/work3/dida/outputs_LVLM/patchscopes_full_pile/google/gemma-3-12b-it_mappings_pile")
+    if MODEL_NAME == "google/gemma-3-12b-it":
+        weight_dir = Path("/work3/dida/outputs_LVLM/patchscopes_full_pile/google/gemma-3-12b-it_mappings_pile")
+    elif MODEL_NAME == "Qwen/Qwen2.5-VL-7B-Instruct":
+        weight_dir = Path("/work3/dida/outputs_LVLM/patchscopes_full_pile/Qwen/Qwen2.5-VL-7B-Instruct_mappings_pile")
     last_layer = num_layers - 1
     mapping_file = weight_dir / f"mapping_{target_layer:02d}-{last_layer:02d}.npy"
     mapping = np.load(mapping_file)

@@ -21,3 +21,16 @@ def evaluate_answer_correctness_by_llm(llm, sample, model_answer):
         or (model_answer.strip().lower() == sample_gt_answer.strip().lower())
     )
     return flag_answer_correct, llm_answer_check
+
+
+def stem_answer(answer):
+    return answer.strip().replace(" ", "").replace(r"{", "").replace(r"}", "")
+
+
+def evaluate_multiple_choice_answer_correctness(llm, sample, model_answer):
+    gt_answer = str(sample["gt_answer"])
+    if gt_answer in model_answer:
+        return True, "n/a"
+    if len(gt_answer) > 2 and stem_answer(gt_answer) in stem_answer(model_answer):
+        return True, "n/a"
+    return evaluate_answer_correctness_by_llm(llm, sample, model_answer)

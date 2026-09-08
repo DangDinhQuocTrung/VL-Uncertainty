@@ -7,7 +7,7 @@ from utils.misc import *
 from utils.textual_perturbation import *
 from utils.visual_perturbation import *
 from utils.visual_statistics import maybe_log_visual_statistics
-from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
+from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm, evaluate_multiple_choice_answer_correctness
 from methods.nli import get_nli_classifier
 from utils.constants import is_choice_question
 
@@ -177,10 +177,10 @@ def infer_single_sample(args, lvlm, sample, is_sampling, llm, log_dict):
         log_dict[sample["idx"]]["answer"] = answer
         flag_answer_correct = True
         if is_choice_question(args, sample):
-            flag_answer_correct = str(sample["gt_answer"]) in answer
+            flag_answer_correct, llm_answer_check = evaluate_multiple_choice_answer_correctness(llm, sample, answer)
         else:
             flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(llm, sample, answer)
-            log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
+        log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
         log_dict[sample["idx"]]["flag_answer_correct"] = flag_answer_correct
     else:
         log_dict[sample["idx"]]["answer_sampling_list"].append(answer)

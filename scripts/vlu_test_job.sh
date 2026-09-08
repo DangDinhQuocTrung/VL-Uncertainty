@@ -49,5 +49,5 @@ python3 main.py \
     --uncertainty ${UNCERTAINTY} \
     --inference_temp ${INFERENCE_TEMP} \
     --sampling_temp ${SAMPLING_TEMP} \
-    --sampling_time ${SAMPLING_TIME}
-    --blur_key_regions True
+    --sampling_time ${SAMPLING_TIME} \
+    --blur_key_regions False

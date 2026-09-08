@@ -10,7 +10,8 @@ from benchmark.PathVQA import PathVQA
 from benchmark.SLAKE import SLAKE
 from benchmark.MedVIGIL import MedVIGIL
 from benchmark.GMAIMMBench import GMAIMMBench
-
+from benchmark.FairVLMed import FairVLMed
+from benchmark.HAM10000 import HAM10000
 from llm.Claude import Claude
 from llm.Gemma import Gemma
 from llm.Qwen import Qwen
@@ -65,6 +66,8 @@ BENCHMARK_MAP = {
     "SLAKE": SLAKE,
     "MedVIGIL": MedVIGIL,
     "GMAIMMBench": GMAIMMBench,
+    "FairVLMed": FairVLMed,
+    "HAM10000": HAM10000,
 }
 
 LLM_MAP = {
@@ -98,6 +101,8 @@ BENCHMARK_TYPE = {
     "SLAKE": "FREE_FORM",
     "MedVIGIL": "MULTI_CHOICE",
     "GMAIMMBench": "MULTI_CHOICE",
+    "FairVLMed": "FREE_FORM",
+    "HAM10000": "MULTI_CHOICE",
 }
 
 # Top-level keys in exp/log_*.json that are run metadata, not per-sample entries.

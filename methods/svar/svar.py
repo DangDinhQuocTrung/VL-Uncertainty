@@ -4,7 +4,7 @@ from transformers.generation.logits_process import LogitsProcessorList, TopKLogi
 from methods.svar.utils import *
 from utils.constants import is_choice_question
 from utils.model_utils import resolve_image_token_id
-from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
+from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm, evaluate_multiple_choice_answer_correctness
 
 
 def _get_vision_token_span(lvlm, inputs, lvlm_type):
@@ -58,10 +58,10 @@ def estimate_uncertainty_by_svar(args, model_manager, sample, llm, log_dict):
     log_dict[sample["idx"]]["answer"] = answer
     flag_answer_correct = True
     if is_choice_question(args, sample):
-        flag_answer_correct = str(sample["gt_answer"]) in answer
+        flag_answer_correct, llm_answer_check = evaluate_multiple_choice_answer_correctness(llm, sample, answer)
     else:
         flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(llm, sample, answer)
-        log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
+    log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
     log_dict[sample["idx"]]["flag_answer_correct"] = flag_answer_correct
     log_dict[sample["idx"]]["answer_sampling_list"] = [answer]
 

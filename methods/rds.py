@@ -14,7 +14,7 @@ import torch
 import torch.nn.functional as F
 
 from methods.beam_utils import generate_greedy_answer, generate_temperature_samples
-from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
+from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm, evaluate_multiple_choice_answer_correctness
 from utils.constants import is_choice_question
 
 _EMBED_MODEL = None
@@ -119,12 +119,10 @@ def estimate_uncertainty_by_rds(args, lvlm, sample, llm, log_dict):
 
     flag_answer_correct = True
     if is_choice_question(args, sample):
-        flag_answer_correct = str(sample["gt_answer"]) in answer
+        flag_answer_correct, llm_answer_check = evaluate_multiple_choice_answer_correctness(llm, sample, answer)
     else:
-        flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(
-            llm, sample, answer
-        )
-        log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
+        flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(llm, sample, answer)
+    log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
     log_dict[sample["idx"]]["flag_answer_correct"] = flag_answer_correct
 
     device = getattr(lvlm, "device", None)

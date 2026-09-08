@@ -7,7 +7,7 @@ adding Gaussian noise.
 
 import torch
 
-from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
+from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm, evaluate_multiple_choice_answer_correctness
 from methods.vauq import build_masked_image
 from methods.vauq_utils import compute_attention_over_visual_tokens
 from methods.vse import infer_single_sample, prototype_semantic_aggregation, hallucination_detection
@@ -42,8 +42,11 @@ def perturbation_of_visual_prompt_vse_masked(args, lvlm, sample, inputs, outputs
         k = min(k, n_tokens)
         max_k = min(k, int(round(float(max_percent) / 100.0 * n_tokens)))
         start_k = max_k - k
-        # positions_to_zero = visual_token_positions[ranked[:k]]
-        positions_to_zero = visual_token_positions[ranked[start_k:max_k]]
+        if args.blur_key_regions:
+            # positions_to_zero = visual_token_positions[ranked[:k]]
+            positions_to_zero = visual_token_positions[ranked[start_k:max_k]]
+        else:
+            positions_to_zero = visual_token_positions[ranked[-k:]]
         masked_image, _grid_h, _grid_w, masked_indices = build_masked_image(
             lvlm,
             sample["img"],
@@ -61,12 +64,10 @@ def _log_clean_answer(args, sample, llm, log_dict, answer):
     log_dict[sample["idx"]]["answer"] = answer
     flag_answer_correct = True
     if is_choice_question(args, sample):
-        flag_answer_correct = str(sample["gt_answer"]) in answer
+        flag_answer_correct, llm_answer_check = evaluate_multiple_choice_answer_correctness(llm, sample, answer)
     else:
-        flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(
-            llm, sample, answer
-        )
-        log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
+        flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(llm, sample, answer)
+    log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
     log_dict[sample["idx"]]["flag_answer_correct"] = flag_answer_correct
 
 

@@ -71,9 +71,9 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--quick_benchmark", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--use_fastest", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--lvlm", type=str, default="Qwen2.5-VL-7B-Instruct")
+    parser.add_argument("--lvlm", type=str, default="medgemma-1.5-4b-it")
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--benchmark", type=str, default="ViLP")
+    parser.add_argument("--benchmark", type=str, default="HAM10000")
     parser.add_argument(
         "--llm",
         type=str,
@@ -83,7 +83,7 @@ def parse_args():
     parser.add_argument(
         "--uncertainty",
         type=str,
-        default="vse_masked",
+        default="vl_uncertainty",
         help=(
             "Uncertainty method. You can also use combined aliases like "
             "nll_max, nll_avg, rds_base, rds_weighted, rds_eigenembed, "
@@ -295,10 +295,9 @@ def obtain_single_sample(args, benchmark, idx, log_dict):
     sample = benchmark.retrieve(idx)
     log_dict[idx]["question"] = sample["question"]
     log_dict[idx]["gt_answer"] = sample["gt_answer"]
-    if "flag_perturbed_inputs" in sample:
-        log_dict[idx]["flag_perturbed_inputs"] = sample["flag_perturbed_inputs"]
-    if "is_closed" in sample:
-        log_dict[idx]["is_closed"] = sample["is_closed"]
+    for keys in ["flag_perturbed_inputs", "is_closed", "race", "gender", "age"]:
+        if keys in sample:
+            log_dict[idx][keys] = sample[keys]
     return sample
 
 
@@ -367,7 +366,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     print(f"Benchmark size: {benchmark_size}")
     if args.quick_benchmark:
         # benchmark_size = min(benchmark_size, 33)
-        benchmark_size = min(benchmark_size, 15)
+        benchmark_size = min(benchmark_size, 10)
 
     # Run the benchmark
     split_inference_quantification = 1 if args.uncertainty in ["euq"] else 0
