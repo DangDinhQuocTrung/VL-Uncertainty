@@ -9,19 +9,46 @@ CLOSED_CHOICES = ["No", "Yes"]
 
 
 def _format_closed_question(question, choices):
-    prompt = str(question).strip() + "\n"
+    prompt = (
+        "You are an expert in radiology specializing in clinical medical image "
+        "interpretation. Analyze the provided radiology image (e.g., CT, MRI, or X-ray "
+        "of the head, neck, chest, abdomen, or pelvis) and answer the clinical visual "
+        "question, which may involve organ recognition, abnormality detection, position, "
+        "modality/plane, size/shape/color, or knowledge-enhanced clinical reasoning.\n"
+    )
     choice_numbers = ""
+    options = ""
     for i, choice in enumerate(choices):
-        prompt += f"({i}): {choice}\n"
-        choice_numbers += f"{i}, "
+        options += f"({i}): {choice}\n"
+        choice_numbers += f"({i}), "
     choice_numbers = choice_numbers[:-2]
-    prompt += "\n"
     prompt += (
-        "This is a single choice question. Answer only one word with a choice number.\n"
+        "Instructions: This is a single choice question. Answer only one word with a "
+        "choice number.\n"
         "You answer must be of the format: Answer: (<choice number>).\n"
         f"Your answer must be one of: {choice_numbers}.\n"
-        "Example: Answer: (1)."
+        "Example: Answer: (1).\n"
     )
+    prompt += f"Question: {str(question).strip()}\n"
+    prompt += f"Options:\n{options}"
+    prompt += "Answer: "
+    return prompt
+
+
+def _format_open_question(question):
+    prompt = (
+        "You are an expert in radiology specializing in clinical medical image "
+        "interpretation. Analyze the provided radiology image (e.g., CT, MRI, or X-ray "
+        "of the head, neck, chest, abdomen, or pelvis) and answer the clinical visual "
+        "question, which may involve organ recognition, abnormality detection, position, "
+        "modality/plane, size/shape/color, or knowledge-enhanced clinical reasoning.\n"
+    )
+    prompt += (
+        "Instructions: Please give a concise answer within five words. "
+        "Please use only one word to answer if possible.\n"
+    )
+    prompt += f"Question: {str(question).strip()}\n"
+    prompt += "Answer: "
     return prompt
 
 
@@ -63,11 +90,7 @@ class SLAKE:
             question = _format_closed_question(row["question"], CLOSED_CHOICES)
             gt_answer = str(CLOSED_CHOICES.index("Yes" if answer_text.lower() == "yes" else "No"))
         else:
-            question = (
-                f"{row['question']}\n"
-                "NOTE: Please give a concise answer within five words.\n"
-                "Please use only one word to answer if possible."
-            )
+            question = _format_open_question(row["question"])
             gt_answer = row["answer"]
         image = Image.open(self.img_root / row["img_name"])
         result = {

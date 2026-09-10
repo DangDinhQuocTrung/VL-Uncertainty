@@ -50,4 +50,4 @@ python3 main.py \
     --inference_temp ${INFERENCE_TEMP} \
     --sampling_temp ${SAMPLING_TEMP} \
     --sampling_time ${SAMPLING_TIME} \
-    --blur_key_regions False
+    --blur_key_regions True

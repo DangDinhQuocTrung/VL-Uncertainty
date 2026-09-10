@@ -309,7 +309,7 @@ def vl_uncertainty(args, lvlm, sample, llm, log_dict):
     )
 
     log_dict[sample["idx"]]["answer_sampling_list"] = []
-    for i in range(args.sampling_time):
+    for i in range(min(args.sampling_time, len(perturbed_prompt_list))):
         infer_single_sample(args, lvlm, perturbed_prompt_list[i], True, llm, log_dict)
 
     uncertainty_estimation(args, sample, llm, log_dict)

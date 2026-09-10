@@ -27,16 +27,28 @@ class FairVLMed:
         row = np.load(npz_path)
         image_path = os.path.join(self.image_dir, npz_name.replace(".npz", ".png"))
 
+        prompt = (
+            "You are an expert in ophthalmology specializing in fundus image interpretation. "
+            "Analyze the provided scanning laser ophthalmoscopy (SLO) fundus image and answer "
+            "the clinical question, which may involve ocular conditions such as glaucoma, optic "
+            "disc appearance, related findings, history, or management inferred from the fundus presentation.\n"
+        )
+        prompt += (
+            "Instructions: Provide a clear, concise clinical answer based on the fundus image findings.\n"
+        )
+        prompt += f"Question: {item['text'].strip()}\n"
+        prompt += "Answer: "
+
         result = {
             "idx": idx,
             "img": image_path,
-            "question": item["text"],
+            "question": prompt,
             "gt_answer": item["answer"],
-            "gender": row["gender"],
-            "race": row["race"],
-            "age": row["age"],
-            "ethnicity": row["ethnicity"],
-            "language": row["language"],
+            "gender": str(row["gender"]),
+            "race": str(row["race"]),
+            "age": row["age"].item(),
+            "ethnicity": str(row["ethnicity"]),
+            "language": str(row["language"]),
         }
         return result
 

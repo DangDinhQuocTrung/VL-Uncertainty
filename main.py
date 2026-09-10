@@ -25,6 +25,7 @@ from methods.pro import estimate_uncertainty_by_pro
 from methods.rds import estimate_uncertainty_by_rds
 from methods.vse import estimate_uncertainty_by_vse
 from methods.vse_masked import estimate_uncertainty_by_vse_masked
+from methods.nll_yes_no import estimate_uncertainty_by_nll_yes_no
 from utils.metrics import compute_f1_score
 
 warnings.filterwarnings("ignore")
@@ -73,7 +74,7 @@ def parse_args():
     parser.add_argument("--use_fastest", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--lvlm", type=str, default="medgemma-1.5-4b-it")
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--benchmark", type=str, default="HAM10000")
+    parser.add_argument("--benchmark", type=str, default="SLAKE")
     parser.add_argument(
         "--llm",
         type=str,
@@ -83,7 +84,7 @@ def parse_args():
     parser.add_argument(
         "--uncertainty",
         type=str,
-        default="vl_uncertainty",
+        default="nll_max",
         help=(
             "Uncertainty method. You can also use combined aliases like "
             "nll_max, nll_avg, rds_base, rds_weighted, rds_eigenembed, "
@@ -225,7 +226,7 @@ def parse_args():
     parser.add_argument(
         "--vauq_mask_mode",
         type=str,
-        default="image",
+        default="hook",
         choices=["hook", "image"],
         help=(
             "VAUQ ablation backend: 'hook' zeros selected visual-token hidden "
@@ -258,7 +259,7 @@ def parse_args():
     parser.add_argument(
         "--sampling_time",
         type=int,
-        default=5,
+        default=10,
         help="Number of samples. For RDS, 0 defaults to --num_beams.",
     )
     args = normalize_uncertainty_args(parser.parse_args())
@@ -342,6 +343,8 @@ def handle_single(args, idx, lvlm, benchmark, llm, log_dict):
         estimate_uncertainty_by_vse(args, lvlm, sample, llm, log_dict)
     elif args.uncertainty == "vse_masked":
         estimate_uncertainty_by_vse_masked(args, lvlm, sample, llm, log_dict)
+    elif args.uncertainty == "nll_yes_no":
+        estimate_uncertainty_by_nll_yes_no(args, lvlm, sample, llm, log_dict)
     else:
         raise ValueError(f"Unsupported method: {args.uncertainty}")
     return
@@ -366,7 +369,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     print(f"Benchmark size: {benchmark_size}")
     if args.quick_benchmark:
         # benchmark_size = min(benchmark_size, 33)
-        benchmark_size = min(benchmark_size, 10)
+        benchmark_size = min(benchmark_size, 5)
 
     # Run the benchmark
     split_inference_quantification = 1 if args.uncertainty in ["euq"] else 0
