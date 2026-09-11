@@ -74,7 +74,7 @@ def parse_args():
     parser.add_argument("--use_fastest", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--lvlm", type=str, default="medgemma-1.5-4b-it")
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--benchmark", type=str, default="SLAKE")
+    parser.add_argument("--benchmark", type=str, default="HAM10000")
     parser.add_argument(
         "--llm",
         type=str,
@@ -369,7 +369,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     print(f"Benchmark size: {benchmark_size}")
     if args.quick_benchmark:
         # benchmark_size = min(benchmark_size, 33)
-        benchmark_size = min(benchmark_size, 5)
+        benchmark_size = min(benchmark_size, 10)
 
     # Run the benchmark
     split_inference_quantification = 1 if args.uncertainty in ["euq"] else 0
