@@ -38,6 +38,15 @@ def normalize_uncertainty_args(args):
         "nll_avg": ("nll", "avg"),
         "nll_average": ("nll", "average"),
         "nll_max": ("nll", "max"),
+        # VSE paper logit baselines (token entropy / probability).
+        "avg_ent": ("nll", "avg_ent"),
+        "avgent": ("nll", "avg_ent"),
+        "max_ent": ("nll", "max_ent"),
+        "maxent": ("nll", "max_ent"),
+        "avg_prob": ("nll", "avg_prob"),
+        "avgprob": ("nll", "avg_prob"),
+        "max_prob": ("nll", "max_prob"),
+        "maxprob": ("nll", "max_prob"),
     }
     rds_aliases = {
         "rds_eigenembed": ("rds", "eigenembed"),
@@ -72,9 +81,9 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--quick_benchmark", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--use_fastest", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--lvlm", type=str, default="medgemma-1.5-4b-it")
+    parser.add_argument("--lvlm", type=str, default="Qwen2.5-VL-7B-Instruct")
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--benchmark", type=str, default="HAM10000")
+    parser.add_argument("--benchmark", type=str, default="ViLP")
     parser.add_argument(
         "--llm",
         type=str,
@@ -84,11 +93,12 @@ def parse_args():
     parser.add_argument(
         "--uncertainty",
         type=str,
-        default="nll_max",
+        default="semantic_entropy_nli",
         help=(
             "Uncertainty method. You can also use combined aliases like "
-            "nll_max, nll_avg, rds_base, rds_weighted, rds_eigenembed, "
-            "semantic_entropy_nli, vse, or vse_masked."
+            "nll_max, nll_avg, avg_ent, max_ent, avg_prob, max_prob, "
+            "rds_base, rds_weighted, rds_eigenembed, semantic_entropy_nli, "
+            "vse, or vse_masked."
         ),
     )
     parser.add_argument("--uncertainty_threshold", type=float, default=1.0)
@@ -96,8 +106,19 @@ def parse_args():
         "--nll_mode",
         type=str,
         default="max",
-        choices=["avg", "average", "max"],
-        help="Aggregation mode for NLL uncertainty: avg/average or max.",
+        choices=[
+            "avg", "average",
+            "max",
+            "avg_ent", "avgent",
+            "max_ent", "maxent",
+            "avg_prob", "avgprob",
+            "max_prob", "maxprob",
+        ],
+        help=(
+            "Logit aggregation for --uncertainty nll: "
+            "avg/max (token NLL), avg_ent/max_ent (token entropy), "
+            "avg_prob/max_prob (1 - token prob as uncertainty)."
+        ),
     )
     parser.add_argument(
         "--num_beams",
@@ -453,9 +474,11 @@ def handle_batch(args, lvlm, benchmark, llm):
     log_dict["uncertainty_method"] = args.uncertainty
     if not os.path.exists("exp"):
         os.makedirs("exp")
-    with open(f"exp/log_{begin_time_str}.json", "w") as f:
+    log_name = f"{args.benchmark}_{args.uncertainty}_{begin_time_str}.json"
+    log_path = os.path.join("exp", log_name)
+    with open(log_path, "w") as f:
         json.dump(log_dict, f, indent=4 if args.quick_benchmark else None)
-    print(f"- Full log is saved at exp/log_dict_{begin_time_str}.json.")
+    print(f"- Full log is saved at {log_path}.")
 
 
 def fix_seed(seed=0):

@@ -15,7 +15,11 @@ from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm
 from utils.constants import LLM_MAP, PERTURBATION_DETECTION_DATASETS
 from utils.metrics import compute_f1_score
 
-LOG_NAME_RE = re.compile(r"^log_.*\.json$")
+# Old: log_YYYY_MM_DD_HH_MM_SS.json
+# New: {benchmark}_{method}_YYYY_MM_DD_HH_MM_SS.json
+LOG_NAME_RE = re.compile(
+    r"^(?:log|.+)_\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}\.json$"
+)
 BENCHMARK_IN_ARGS_RE = re.compile(r"benchmark=['\"]([^'\"]+)['\"]")
 
 
@@ -401,7 +405,10 @@ def main():
 
     log_files = list_log_files(output_dir)
     if not log_files:
-        raise FileNotFoundError(f"No log_*.json files found in {output_dir}")
+        raise FileNotFoundError(
+            f"No experiment log JSON files found in {output_dir} "
+            f"(expected log_*.json or {{benchmark}}_{{method}}_*.json)"
+        )
 
     matched_files, collection = build_collection(log_files, dataset)
     if not matched_files:

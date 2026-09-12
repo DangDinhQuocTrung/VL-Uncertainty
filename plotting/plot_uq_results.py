@@ -19,6 +19,9 @@ import numpy as np
 
 from utils.constants import DETECTION_AUROC_KEYS
 
+LOG_NAME_RE = re.compile(
+    r"^(?:log|.+)_\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}(?:_revised)?\.json$"
+)
 BENCHMARK_IN_ARGS_RE = re.compile(r"benchmark=['\"]([^'\"]+)['\"]")
 UNCERTAINTY_IN_ARGS_RE = re.compile(r"uncertainty=['\"]([^'\"]+)['\"]")
 
@@ -47,7 +50,10 @@ def parse_args():
         "--exp_dir",
         type=str,
         default="./exp",
-        help="Directory containing log_*.json files.",
+        help=(
+            "Directory containing experiment logs "
+            "(log_*.json or {benchmark}_{method}_*.json)."
+        ),
     )
     parser.add_argument(
         "--dataset",
@@ -61,8 +67,8 @@ def parse_args():
         default="raw",
         choices=["raw", "revised"],
         help=(
-            "raw: use original log_*.json (exclude *_revised.json); "
-            "revised: use only log_*_revised.json."
+            "raw: use original experiment logs (exclude *_revised.json); "
+            "revised: use only *_revised.json."
         ),
     )
     parser.add_argument(
@@ -138,9 +144,11 @@ def extract_detection_auroc(log_dict):
 
 def list_log_files(exp_dir: Path, mode: str):
     files = []
-    for path in sorted(exp_dir.glob("log_*.json")):
+    for path in sorted(exp_dir.glob("*.json")):
         name = path.name
         if name.endswith("_answer_collection.json"):
+            continue
+        if not LOG_NAME_RE.match(name):
             continue
         is_revised = name.endswith("_revised.json")
         if mode == "revised":
