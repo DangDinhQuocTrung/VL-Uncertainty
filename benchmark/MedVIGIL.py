@@ -41,12 +41,7 @@ class MedVIGIL:
 
     def retrieve(self, idx):
         row = self.ds.iloc[idx]
-        prompt = (
-            "You are an expert in radiology and clinical medical image interpretation. "
-            "Carefully examine the provided medical image and answer the clinical visual "
-            "question using only findings supported by the image evidence. Questions may "
-            "involve identifying findings, anatomy, laterality, or related radiology reasoning.\n"
-        )
+        prompt = "You are answering a clinical question in the radiology and clinical domain.\n"
         question = str(row["question"])
         choices = ""
         choice_numbers = ""
@@ -60,14 +55,14 @@ class MedVIGIL:
             num_c += 1
         choice_numbers = choice_numbers[:-2]
 
+        prompt += f"Question: {question}\n"
+        prompt += f"Options:\n{choices}\n"
         prompt += (
             "Instructions: This is a single choice question. Answer only one word with a choice number.\n"
             "You answer must be of the format: Answer: (<choice number>).\n"
             f"Your choice number must be one of: {choice_numbers}.\n"
             "Example: Answer: (1).\n"
         )
-        prompt += f"Question: {question}\n"
-        prompt += f"Options:\n{choices}\n"
         prompt += f"Answer: "
 
         correct_letter = str(row["correct_letter"]).strip().upper()

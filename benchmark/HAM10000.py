@@ -24,11 +24,10 @@ class HAM10000:
 
         # Parse the clinical question out of the CARES template preamble.
         question = item["text"]
-        options = str(item.get("options", "")).strip()
         gender, age = item["gender"], item["age"]
 
-        prompt = f"Patient information: Gender: {gender}, Age: {age}\n"
-        prompt += f"{question}\n"
+        prompt = f"{question}\n"
+        prompt += f"Patient information: Gender: {gender}, Age: {age}\n"
         prompt += (
             "Instructions: Please answer in the following format: {letter}:{option text}. "
             "Example: If the correct answer is 'B', the answer should be B:scalp.\n"

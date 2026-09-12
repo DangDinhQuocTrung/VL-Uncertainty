@@ -11,18 +11,12 @@ class VQARAD:
 
     def retrieve(self, idx):
         row = self.ds["test"][idx]
-        prompt = (
-            "You are an expert in radiology specializing in clinical medical image "
-            "interpretation. Analyze the provided radiology image (e.g., head, chest, or "
-            "abdomen) and answer the clinician-authored visual question, which may involve "
-            "modality, plane, organ system, abnormality, presence/absence of findings, or "
-            "related radiology reasoning.\n"
-        )
+        prompt = "You are answering a clinical question in the radiology domain.\n"
+        prompt += f"Question: {row['question'].strip()}\n"
         prompt += (
             "Instructions: Please give a concise answer within five words. "
             "Please use only one word to answer if possible.\n"
         )
-        prompt += f"Question: {row['question'].strip()}\n"
         prompt += "Answer: "
 
         result = {

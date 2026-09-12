@@ -9,19 +9,15 @@ CLOSED_CHOICES = ["No", "Yes"]
 
 
 def _format_closed_question(question, choices):
-    prompt = (
-        "You are an expert in radiology specializing in clinical medical image "
-        "interpretation. Analyze the provided radiology image (e.g., CT, MRI, or X-ray "
-        "of the head, neck, chest, abdomen, or pelvis) and answer the clinical visual "
-        "question, which may involve organ recognition, abnormality detection, position, "
-        "modality/plane, size/shape/color, or knowledge-enhanced clinical reasoning.\n"
-    )
+    prompt = "You are answering a clinical question in the radiology domain.\n"
     choice_numbers = ""
     options = ""
     for i, choice in enumerate(choices):
         options += f"({i}): {choice}\n"
         choice_numbers += f"({i}), "
     choice_numbers = choice_numbers[:-2]
+    prompt += f"Question: {str(question).strip()}\n"
+    prompt += f"Options:\n{options}"
     prompt += (
         "Instructions: This is a single choice question. Answer only one word with a "
         "choice number.\n"
@@ -29,25 +25,17 @@ def _format_closed_question(question, choices):
         f"Your answer must be one of: {choice_numbers}.\n"
         "Example: Answer: (1).\n"
     )
-    prompt += f"Question: {str(question).strip()}\n"
-    prompt += f"Options:\n{options}"
     prompt += "Answer: "
     return prompt
 
 
 def _format_open_question(question):
-    prompt = (
-        "You are an expert in radiology specializing in clinical medical image "
-        "interpretation. Analyze the provided radiology image (e.g., CT, MRI, or X-ray "
-        "of the head, neck, chest, abdomen, or pelvis) and answer the clinical visual "
-        "question, which may involve organ recognition, abnormality detection, position, "
-        "modality/plane, size/shape/color, or knowledge-enhanced clinical reasoning.\n"
-    )
+    prompt = "You are answering a clinical question in the radiology domain.\n"
+    prompt += f"Question: {str(question).strip()}\n"
     prompt += (
         "Instructions: Please give a concise answer within five words. "
         "Please use only one word to answer if possible.\n"
     )
-    prompt += f"Question: {str(question).strip()}\n"
     prompt += "Answer: "
     return prompt
 

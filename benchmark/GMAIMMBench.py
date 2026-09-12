@@ -111,21 +111,15 @@ class GMAIMMBench:
         choice_numbers = choice_numbers[:-2]
         domain = row["modality"]
 
-        prompt = (
-            "You are an expert in clinical medical image interpretation. "
-            f"Analyze the provided medical image in the {domain} domain and answer "
-            "the clinical visual question, which may involve disease diagnosis, severity grading, "
-            "organ/tissue recognition, attribute recognition, counting, or related "
-            "clinical reasoning based on the visual findings.\n"
-        )
+        prompt = f"You are answering a clinical question in the {domain} domain.\n"
+        prompt += f"Question: {question}\n"
+        prompt += f"Options:\n{choices}\n"
         prompt += (
             f"Instructions: This is a single choice question. Answer only one word with a choice number.\n"
             f"You answer must be of the format: Answer: (<choice number>).\n"
             f"Your answer must be one of: {choice_numbers}.\n"
             f"Example: Answer: (1).\n"
         )
-        prompt += f"Question: {question}\n"
-        prompt += f"Options:\n{choices}\n"
         prompt += f"Answer: "
 
         answer = str(row["answer"]).strip().upper()

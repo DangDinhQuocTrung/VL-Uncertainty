@@ -11,17 +11,12 @@ class PathVQA:
 
     def retrieve(self, idx):
         row = self.ds["test"][idx]
-        prompt = (
-            "You are an expert in pathology specializing in histopathology and cytology "
-            "image interpretation. Analyze the provided pathology image and answer the "
-            "visual question, which may involve tissue type, cellular morphology, staining, "
-            "location, abnormal findings, or related pathology reasoning.\n"
-        )
+        prompt = "You are answering a clinical question in the pathology domain.\n"
+        prompt += f"Question: {row['question'].strip()}\n"
         prompt += (
             "Instructions: Please give a concise answer within five words. "
             "Please use only one word to answer if possible.\n"
         )
-        prompt += f"Question: {row['question'].strip()}\n"
         prompt += "Answer: "
 
         result = {
