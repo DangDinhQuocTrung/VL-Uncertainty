@@ -36,6 +36,7 @@ METHOD_DISPLAY = {
     "rds": "RDS",
     "vse": "VSE",
     "vse_masked": "VSE-Masked",
+    "scale_entropy": "Scale Entropy",
 }
 
 

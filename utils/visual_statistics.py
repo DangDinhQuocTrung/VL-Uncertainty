@@ -13,7 +13,7 @@ import torch
 import torch.nn.functional as F
 
 from methods.euq.evidence import EvidenceModel
-from utils.model_utils import get_lm_head, resolve_image_token_id
+from utils.model_utils import get_final_norm, get_lm_head, resolve_image_token_id
 
 
 def _token_entropy_from_logits(logits):
@@ -110,10 +110,13 @@ def _forward_visual_hidden(
         if handle is not None:
             handle.remove()
 
-    # HF model outputs typically expose the final hidden state after the model's
-    # last normalization step, so applying the final norm again would distort
-    # the LogitLens ranking.
-    hidden = outputs.hidden_states[-1][0, visual_positions]
+    # HF hidden_states[-1] is pre-final-norm on Qwen2.5-VL (and similar).
+    # LogitLens / lm_head expect the post-norm representation.
+    hidden = outputs.hidden_states[-1]
+    final_norm = get_final_norm(lvlm.model)
+    if final_norm is not None:
+        hidden = final_norm(hidden)
+    hidden = hidden[0, visual_positions]
     return hidden, visual_positions
 
 

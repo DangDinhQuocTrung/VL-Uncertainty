@@ -28,5 +28,5 @@ class ViLP_captioning:
 
 
 if __name__ == "__main__":
-    benchmark = ViLP()
+    benchmark = ViLP_captioning()
     print(benchmark.retrieve(0))

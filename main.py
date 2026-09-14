@@ -26,6 +26,8 @@ from methods.rds import estimate_uncertainty_by_rds
 from methods.vse import estimate_uncertainty_by_vse
 from methods.vse_masked import estimate_uncertainty_by_vse_masked
 from methods.nll_yes_no import estimate_uncertainty_by_nll_yes_no
+from methods.tuned_lens_uncertainty import estimate_uncertainty_by_tuned_lens
+from methods.scale_entropy import estimate_uncertainty_by_scale_entropy
 from utils.metrics import compute_f1_score
 
 warnings.filterwarnings("ignore")
@@ -72,6 +74,10 @@ def normalize_uncertainty_args(args):
         args.uncertainty = "vse"
     elif uncertainty in ("vse_masked", "visual_semantic_entropy_masked"):
         args.uncertainty = "vse_masked"
+    elif uncertainty in ("scale_entropy", "scale_se"):
+        args.uncertainty = "scale_entropy"
+    elif uncertainty in ("tuned_lens", "tuned_lens_uncertainty", "early_exit"):
+        args.uncertainty = "tuned_lens_uncertainty"
 
     return args
 
@@ -93,12 +99,12 @@ def parse_args():
     parser.add_argument(
         "--uncertainty",
         type=str,
-        default="semantic_entropy_nli",
+        default="avg_ent",
         help=(
             "Uncertainty method. You can also use combined aliases like "
             "nll_max, nll_avg, avg_ent, max_ent, avg_prob, max_prob, "
             "rds_base, rds_weighted, rds_eigenembed, semantic_entropy_nli, "
-            "vse, or vse_masked."
+            "vse, vse_masked, scale_entropy, or tuned_lens_uncertainty."
         ),
     )
     parser.add_argument("--uncertainty_threshold", type=float, default=1.0)
@@ -228,6 +234,34 @@ def parse_args():
             "semantic_entropy; visual-token mean head conflict/ignorance for euq; "
             "both on the VAUQ-masked visual input for vauq."
         ),
+    )
+    parser.add_argument(
+        "--tuned_lens_dir",
+        type=str,
+        default=(
+            "/work3/dida/outputs_LVLM/patchscopes_full_pile/Qwen/"
+            "Qwen2.5-7B-Instruct_mappings_pile"
+        ),
+        help="Directory of TunedLens mapping_{L:02d}-{last:02d}.npy files.",
+    )
+    parser.add_argument(
+        "--tuned_lens_min_layer",
+        type=int,
+        default=0,
+        help="First transformer layer index included in TunedLens readout.",
+    )
+    parser.add_argument(
+        "--tuned_lens_layer_stride",
+        type=int,
+        default=1,
+        help="Stride over layers when building answer_sampling_list (final layer always kept).",
+    )
+    parser.add_argument(
+        "--tuned_lens_layers",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Optional explicit layer indices for TunedLens readout (overrides min/stride).",
     )
 
     # Perturbation-specific arguments
@@ -364,8 +398,12 @@ def handle_single(args, idx, lvlm, benchmark, llm, log_dict):
         estimate_uncertainty_by_vse(args, lvlm, sample, llm, log_dict)
     elif args.uncertainty == "vse_masked":
         estimate_uncertainty_by_vse_masked(args, lvlm, sample, llm, log_dict)
+    elif args.uncertainty == "scale_entropy":
+        estimate_uncertainty_by_scale_entropy(args, lvlm, sample, llm, log_dict)
     elif args.uncertainty == "nll_yes_no":
         estimate_uncertainty_by_nll_yes_no(args, lvlm, sample, llm, log_dict)
+    elif args.uncertainty == "tuned_lens_uncertainty":
+        estimate_uncertainty_by_tuned_lens(args, lvlm, sample, llm, log_dict)
     else:
         raise ValueError(f"Unsupported method: {args.uncertainty}")
     return

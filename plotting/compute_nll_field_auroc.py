@@ -109,6 +109,9 @@ def detection_targets(
 
 def field_scores(samples: List[Dict[str, Any]], field: str) -> Optional[torch.Tensor]:
     if any(field not in s for s in samples):
+        for s in samples:
+            if field not in s:
+                print(s)
         return None
     raw = torch.tensor([s[field] for s in samples], dtype=torch.float)
     if field in CONFIDENCE_FIELDS:

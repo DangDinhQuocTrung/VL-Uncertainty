@@ -151,7 +151,7 @@ class Gemma3:
             num_beam_groups=num_beam_groups,
             diversity_penalty=diversity_penalty,
             length_penalty=length_penalty,
-            min_temperature=0.01,
+            min_temperature=0.001,
         )
         # return_mode: 0=EUQ hooks, 1=sequences+scores, 2=+attentions/hidden_states
         need_attn_states = return_more and return_mode == 2

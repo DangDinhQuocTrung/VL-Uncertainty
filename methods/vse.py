@@ -138,9 +138,7 @@ def prototype_semantic_aggregation(args, sample, log_dict, device=None):
         return
 
     question = parse_original_question(sample["question"])
-    distance_matrix = compute_semantic_distance_matrix(
-        args, answers, question, device=device
-    )
+    distance_matrix = compute_semantic_distance_matrix(args, answers, question, device=device)
     labels = hierarchical_cluster(
         distance_matrix,
         threshold=getattr(args, "vse_cluster_threshold", 0.5),
