@@ -10,7 +10,7 @@ from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm, evaluate
 from utils.constants import is_choice_question
 from methods.vauq_utils import compute_attention_over_visual_tokens
 from utils.visual_statistics import maybe_log_visual_statistics
-from utils.constants import MAX_NEW_TOKENS
+from utils.text_constants import MAX_NEW_TOKENS
 
 
 def compute_entropy(outputs):

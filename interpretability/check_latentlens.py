@@ -4,7 +4,7 @@ from transformers import AutoProcessor, AutoTokenizer, AutoModel, AutoModelForCa
 from PIL import Image
 
 from methods.vauq import compute_attention_over_visual_tokens
-from utils.constants import MAX_NEW_TOKENS
+from utils.text_constants import MAX_NEW_TOKENS
 
 
 def load_model(model_name, dtype=torch.float32, device=None, trust_remote_code=True):

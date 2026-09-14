@@ -7,7 +7,7 @@ from PIL import Image
 from torchvision.transforms.functional import InterpolationMode
 from transformers import AutoModel, AutoTokenizer
 
-from utils.constants import MAX_NEW_TOKENS
+from utils.text_constants import MAX_NEW_TOKENS
 
 warnings.filterwarnings("ignore")
 

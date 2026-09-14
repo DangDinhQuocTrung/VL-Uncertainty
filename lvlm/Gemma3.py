@@ -11,7 +11,7 @@ from transformers import (
 )
 
 from lvlm.generation_utils import build_generation_kwargs
-from utils.constants import MAX_NEW_TOKENS
+from utils.text_constants import MAX_NEW_TOKENS
 
 warnings.filterwarnings("ignore")
 

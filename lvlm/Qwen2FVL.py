@@ -6,7 +6,7 @@ from qwen_vl_utils import process_vision_info
 from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration, BitsAndBytesConfig, GenerationConfig
 
 from custom_llava.conversation import conv_templates, SeparatorStyle
-from utils.constants import MAX_NEW_TOKENS
+from utils.text_constants import MAX_NEW_TOKENS
 from utils.text_constants import DEFAULT_IMAGE_TOKEN
 from lvlm.generation_utils import build_generation_kwargs
 

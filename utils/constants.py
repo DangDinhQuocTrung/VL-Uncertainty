@@ -25,8 +25,6 @@ from lvlm.HuatuoGPTVision import HuatuoGPTVision
 from lvlm.Gemma3 import Gemma3
 
 
-MAX_NEW_TOKENS = 128
-
 BLACK_BOX_METHODS = [
     "vl_uncertainty",
     "semantic_entropy",

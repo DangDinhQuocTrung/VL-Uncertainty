@@ -7,7 +7,7 @@ from PIL import Image
 
 from methods.vauq_utils import compute_attention_over_visual_tokens
 from interpretability.scopes_lens_utils import load_model, get_num_layers, get_transformer_layers, get_post_hook, logit_lens_on_token
-from utils.constants import MAX_NEW_TOKENS
+from utils.text_constants import MAX_NEW_TOKENS
 
 
 # MODEL_NAME = "google/gemma-3-12b-it"

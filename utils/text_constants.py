@@ -1,2 +1,2 @@
-
+MAX_NEW_TOKENS = 128
 DEFAULT_IMAGE_TOKEN = "<image>"
