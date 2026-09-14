@@ -4,6 +4,8 @@ import torch
 from PIL import Image
 from transformers import LlavaNextForConditionalGeneration, LlavaNextProcessor
 
+from utils.constants import MAX_NEW_TOKENS
+
 warnings.filterwarnings("ignore")
 
 
@@ -44,7 +46,7 @@ class LLaVANeXT:
         inputs = self.processor(images=image, text=prompt, return_tensors="pt").to(0)
         output = self.model.generate(
             **inputs,
-            max_new_tokens=64,
+            max_new_tokens=MAX_NEW_TOKENS,
             do_sample=temp > 0.0,
             temperature=temp,
         )

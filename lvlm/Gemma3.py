@@ -11,6 +11,7 @@ from transformers import (
 )
 
 from lvlm.generation_utils import build_generation_kwargs
+from utils.constants import MAX_NEW_TOKENS
 
 warnings.filterwarnings("ignore")
 
@@ -157,7 +158,7 @@ class Gemma3:
         need_attn_states = return_more and return_mode == 2
         outputs = self.model.generate(
             **inputs,
-            max_new_tokens=64,
+            max_new_tokens=MAX_NEW_TOKENS,
             output_scores=return_more,
             output_attentions=need_attn_states,
             output_hidden_states=need_attn_states,

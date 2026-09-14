@@ -7,6 +7,8 @@ from PIL import Image
 from torchvision.transforms.functional import InterpolationMode
 from transformers import AutoModel, AutoTokenizer
 
+from utils.constants import MAX_NEW_TOKENS
+
 warnings.filterwarnings("ignore")
 
 
@@ -150,7 +152,7 @@ class InternVL:
     def generate(self, image, question, temp):
         pixel_values = load_image(image, max_num=4).to(torch.bfloat16).to(0)
         generation_config = dict(
-            max_new_tokens=64,
+            max_new_tokens=MAX_NEW_TOKENS,
             do_sample=temp > 0.0,
             temperature=temp,
         )

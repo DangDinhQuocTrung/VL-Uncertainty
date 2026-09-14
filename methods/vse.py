@@ -13,7 +13,7 @@ import collections
 import numpy as np
 from sklearn.cluster import AgglomerativeClustering
 
-from methods.nli import get_nli_classifier
+from methods.distance_utils import cosine_distance_matrix, deberta_distance_matrix
 from methods.vl_uncertainty import hallucination_detection, infer_single_sample
 from utils.misc import parse_original_question
 from utils.visual_perturbation import gaussian_noise
@@ -31,38 +31,16 @@ def perturbation_of_visual_prompt_vse(args, sample):
     return [gaussian_noise(sample["img"], degree) for _ in range(num_views)]
 
 
-def _cosine_distance_matrix(answers, embed_model_name, device):
-    from methods.rds import embed_answers
-
-    embeddings = embed_answers(answers, model_name=embed_model_name, device=device)
-    similarity = embeddings @ embeddings.T
-    dist = (1.0 - similarity).clamp(min=0.0).detach().cpu().numpy().astype(np.float64)
-    np.fill_diagonal(dist, 0.0)
-    return dist
-
-
-def _deberta_distance_matrix(args, answers, question):
-    nli = get_nli_classifier(
-        model_name=getattr(
-            args, "vse_nli_model", "microsoft/deberta-v2-xlarge-mnli"
-        ),
-        device=getattr(args, "nli_device", "auto"),
-    )
-    return nli.pairwise_semantic_distance(answers, question=question)
-
-
 def compute_semantic_distance_matrix(args, answers, question, device=None):
     distance_fn = getattr(args, "vse_distance", "deberta").lower()
     if distance_fn == "cosine":
-        embed_model = getattr(args, "vse_embed_model", None) or getattr(
-            args, "rds_embed_model", "all-MiniLM-L6-v2"
-        )
-        return _cosine_distance_matrix(answers, embed_model, device)
+        embed_model = getattr(args, "embed_model", "all-MiniLM-L6-v2")
+        return cosine_distance_matrix(answers, embed_model, device)
     if distance_fn != "deberta":
         raise ValueError(
             f"Unsupported VSE distance '{distance_fn}'. Expected 'deberta' or 'cosine'."
         )
-    return _deberta_distance_matrix(args, answers, question)
+    return deberta_distance_matrix(args, answers, question)
 
 
 def hierarchical_cluster(distance_matrix, threshold, linkage="average"):

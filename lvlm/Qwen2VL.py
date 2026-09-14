@@ -4,6 +4,8 @@ import torch
 from qwen_vl_utils import process_vision_info
 from transformers import AutoProcessor, Qwen2VLForConditionalGeneration, GenerationConfig
 
+from utils.constants import MAX_NEW_TOKENS
+
 warnings.filterwarnings("ignore")
 
 
@@ -54,7 +56,7 @@ class Qwen2VL:
         inputs = self.prepare_inputs(image, question)
         outputs = self.model.generate(
             **inputs,
-            max_new_tokens=64,
+            max_new_tokens=MAX_NEW_TOKENS,
             output_scores=return_more,
             output_attentions=return_more,
             return_dict_in_generate=return_more,

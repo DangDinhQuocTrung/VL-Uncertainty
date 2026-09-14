@@ -1,6 +1,8 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from utils.constants import MAX_NEW_TOKENS
+
 
 class Gemma:
 
@@ -62,7 +64,7 @@ class Gemma:
         temperature = max(float(temp), 1e-5)
         generated_ids = self.model.generate(
             **inputs,
-            max_new_tokens=64,
+            max_new_tokens=MAX_NEW_TOKENS,
             do_sample=True,
             temperature=temperature,
             top_p=0.8,

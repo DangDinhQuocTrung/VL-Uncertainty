@@ -10,6 +10,7 @@ from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm, evaluate
 from utils.constants import is_choice_question
 from methods.vauq_utils import compute_attention_over_visual_tokens
 from utils.visual_statistics import maybe_log_visual_statistics
+from utils.constants import MAX_NEW_TOKENS
 
 
 def compute_entropy(outputs):
@@ -106,12 +107,8 @@ def build_masked_image(
         image = Image.fromarray(np.asarray(image)).convert("RGB")
     n_tokens = int(visual_token_positions.numel())
     grid_h, grid_w = _resolve_patch_grid(lvlm, inputs, n_tokens, image)
-    masked_indices = _masked_visual_token_indices(
-        visual_token_positions, positions_to_zero
-    )
-    rendered = render_image_with_blacked_masked_tokens(
-        image, masked_indices, grid_h, grid_w
-    )
+    masked_indices = _masked_visual_token_indices(visual_token_positions, positions_to_zero)
+    rendered = render_image_with_blacked_masked_tokens(image, masked_indices, grid_h, grid_w)
     return rendered, grid_h, grid_w, masked_indices
 
 
@@ -251,7 +248,7 @@ def generate_with_masked_visual_tokens(
     with torch.no_grad():
         outputs = model.model.generate(
             **inputs,
-            max_new_tokens=128,
+            max_new_tokens=MAX_NEW_TOKENS,
             do_sample=False,
             temperature=0.0,
             output_scores=True,

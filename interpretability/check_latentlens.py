@@ -4,6 +4,7 @@ from transformers import AutoProcessor, AutoTokenizer, AutoModel, AutoModelForCa
 from PIL import Image
 
 from methods.vauq import compute_attention_over_visual_tokens
+from utils.constants import MAX_NEW_TOKENS
 
 
 def load_model(model_name, dtype=torch.float32, device=None, trust_remote_code=True):
@@ -64,7 +65,7 @@ def check_latentlens():
     with torch.no_grad():
         generated_outputs = model.generate(
             **inputs,
-            max_new_tokens=64,
+            max_new_tokens=MAX_NEW_TOKENS,
             do_sample=False,
             temperature=0.0,
             output_attentions=True,

@@ -1,5 +1,7 @@
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from utils.constants import MAX_NEW_TOKENS
+
 
 class Qwen:
 
@@ -28,7 +30,7 @@ class Qwen:
         model_inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
         generated_ids = self.model.generate(
             **model_inputs,
-            max_new_tokens=256,
+            max_new_tokens=MAX_NEW_TOKENS,
             do_sample=True,
             temperature=temp,
             top_p=0.8,

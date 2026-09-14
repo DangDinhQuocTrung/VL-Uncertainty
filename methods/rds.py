@@ -15,37 +15,8 @@ import torch.nn.functional as F
 
 from methods.beam_utils import generate_greedy_answer, generate_temperature_samples
 from methods.evaluate_by_llm import evaluate_answer_correctness_by_llm, evaluate_multiple_choice_answer_correctness
+from methods.distance_utils import embed_answers
 from utils.constants import is_choice_question
-
-_EMBED_MODEL = None
-
-
-def _get_embed_model(model_name, device):
-    global _EMBED_MODEL
-    if _EMBED_MODEL is not None and getattr(_EMBED_MODEL, "_rds_name", None) == model_name:
-        return _EMBED_MODEL
-    try:
-        from sentence_transformers import SentenceTransformer
-    except ImportError as exc:
-        raise ImportError(
-            "RDS requires the sentence-transformers package. "
-            "Install with: pip install sentence-transformers"
-        ) from exc
-    model = SentenceTransformer(model_name, device=str(device))
-    model._rds_name = model_name
-    _EMBED_MODEL = model
-    return model
-
-
-def embed_answers(answers, model_name="all-MiniLM-L6-v2", device=None):
-    """Embed answers and L2-normalize onto the unit hypersphere."""
-    if device is None:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    embed_model = _get_embed_model(model_name, device)
-    texts = [a if (a is not None and str(a).strip()) else " " for a in answers]
-    embeddings = embed_model.encode(texts, convert_to_tensor=True, device=device)
-    embeddings = F.normalize(embeddings.float(), p=2, dim=1)
-    return embeddings
 
 
 def compute_eigen_embed(embeddings, alpha=1e-3):
@@ -100,7 +71,7 @@ def compute_rds_score(embeddings, avg_nlls, mode="base"):
 
 def estimate_uncertainty_by_rds(args, lvlm, sample, llm, log_dict):
     rds_mode = getattr(args, "rds_mode", "base")
-    embed_model_name = getattr(args, "rds_embed_model", "all-MiniLM-L6-v2")
+    embed_model_name = getattr(args, "embed_model", "all-MiniLM-L6-v2")
 
     # Main answer: greedy / inference-temp (aligned with VAUQ).
     answer = generate_greedy_answer(args, lvlm, sample)
@@ -136,7 +107,7 @@ def estimate_uncertainty_by_rds(args, lvlm, sample, llm, log_dict):
     uncertainty, _ = compute_rds_score(embeddings, avg_nlls, mode=rds_mode)
 
     log_dict[sample["idx"]]["rds_mode"] = rds_mode
-    log_dict[sample["idx"]]["rds_embed_model"] = embed_model_name
+    log_dict[sample["idx"]]["embed_model"] = embed_model_name
     log_dict[sample["idx"]]["eigenembed"] = eigenembed
     log_dict[sample["idx"]]["rds_base"] = rds_base
     log_dict[sample["idx"]]["rds_weighted"] = rds_weighted

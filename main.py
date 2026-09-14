@@ -89,7 +89,7 @@ def parse_args():
     parser.add_argument("--use_fastest", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--lvlm", type=str, default="Qwen2.5-VL-7B-Instruct")
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--benchmark", type=str, default="ViLP")
+    parser.add_argument("--benchmark", type=str, default="ViLP_captioning")
     parser.add_argument(
         "--llm",
         type=str,
@@ -156,10 +156,13 @@ def parse_args():
         help="RDS scoring mode: eigenembed, base (RDS), or weighted (RDSw).",
     )
     parser.add_argument(
-        "--rds_embed_model",
+        "--embed_model",
         type=str,
         default="all-MiniLM-L6-v2",
-        help="SentenceTransformer model used to embed answers for RDS.",
+        help=(
+            "SentenceTransformer model for answer embeddings "
+            "(RDS; VSE when --vse_distance cosine)."
+        ),
     )
     parser.add_argument(
         "--se_clustering",
@@ -175,8 +178,11 @@ def parse_args():
     parser.add_argument(
         "--nli_model",
         type=str,
-        default="microsoft/deberta-large-mnli",
-        help="Hugging Face NLI model for --se_clustering nli.",
+        default="microsoft/deberta-v2-xlarge-mnli",
+        help=(
+            "Hugging Face NLI model for --se_clustering nli and "
+            "VSE when --vse_distance deberta."
+        ),
     )
     parser.add_argument(
         "--nli_device",
@@ -202,18 +208,6 @@ def parse_args():
         default="deberta",
         choices=["deberta", "cosine"],
         help="Semantic distance for VSE: DeBERTa-MNLI (paper default) or cosine embeddings.",
-    )
-    parser.add_argument(
-        "--vse_nli_model",
-        type=str,
-        default="microsoft/deberta-v2-xlarge-mnli",
-        help="NLI model used as VSE semantic distance d(·,·). Paper uses DeBERTa-v2-xlarge-mnli.",
-    )
-    parser.add_argument(
-        "--vse_embed_model",
-        type=str,
-        default="all-MiniLM-L6-v2",
-        help="SentenceTransformer model used when --vse_distance cosine.",
     )
     parser.add_argument(
         "--vse_mask_percents",
@@ -428,7 +422,7 @@ def handle_batch(args, lvlm, benchmark, llm):
     print(f"Benchmark size: {benchmark_size}")
     if args.quick_benchmark:
         # benchmark_size = min(benchmark_size, 33)
-        benchmark_size = min(benchmark_size, 10)
+        benchmark_size = min(benchmark_size, 12)
 
     # Run the benchmark
     split_inference_quantification = 1 if args.uncertainty in ["euq"] else 0
