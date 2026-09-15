@@ -41,8 +41,8 @@ class MedVIGIL:
 
     def retrieve(self, idx):
         row = self.ds.iloc[idx]
-        prompt = "You are answering a clinical question in the radiology and clinical domain.\n"
         question = str(row["question"])
+        question += "\n"
         choices = ""
         choice_numbers = ""
         num_c = 0
@@ -54,16 +54,14 @@ class MedVIGIL:
             choice_numbers += f"{i}, "
             num_c += 1
         choice_numbers = choice_numbers[:-2]
-
-        prompt += f"Question: {question}\n"
-        prompt += f"Options:\n{choices}\n"
-        prompt += (
-            "Instructions: This is a single choice question. Answer only one word with a choice number.\n"
-            "You answer must be of the format: Answer: (<choice number>).\n"
-            f"Your choice number must be one of: {choice_numbers}.\n"
-            "Example: Answer: (1).\n"
+        question += choices
+        question += "\n"
+        question += (
+            f"This is a single choice question. Answer only one word with a choice number.\n"
+            f"You answer must be of the format: Answer: (<choice number>).\n"
+            f"Your answer must be one of: {choice_numbers}.\n"
+            f"Example: Answer: (1)."
         )
-        prompt += f"Answer: "
 
         correct_letter = str(row["correct_letter"]).strip().upper()
         gt_answer = "ABCDE".index(correct_letter)
@@ -85,7 +83,7 @@ class MedVIGIL:
         result = {
             "idx": idx,
             "img": self._resolve_image(row["image_file"]),
-            "question": prompt,
+            "question": question,
             "gt_answer": str(gt_answer),
             "num_c": num_c,
             "flag_perturbed_inputs": flag_perturbed_inputs,

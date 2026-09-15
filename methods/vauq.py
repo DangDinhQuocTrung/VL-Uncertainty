@@ -265,6 +265,7 @@ def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
     alpha = 1.0
     device = lvlm.device
     log_masked_image = False
+    use_masked_answer = False
     mask_mode = str(getattr(args, "vauq_mask_mode", "hook")).lower()
 
     # Generate answer
@@ -276,15 +277,16 @@ def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
         return_mode=2,
         # needs attentions over visual tokens
     )
-    log_dict[sample["idx"]]["answer"] = answer
-    flag_answer_correct = True
-    if is_choice_question(args, sample):
-        flag_answer_correct, llm_answer_check = evaluate_multiple_choice_answer_correctness(llm, sample, answer)
-    else:
-        flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(llm, sample, answer)
-    log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
-    log_dict[sample["idx"]]["flag_answer_correct"] = flag_answer_correct
-    log_dict[sample["idx"]]["answer_sampling_list"] = [answer]
+    if not use_masked_answer:
+        log_dict[sample["idx"]]["answer"] = answer
+        flag_answer_correct = True
+        if is_choice_question(args, sample):
+            flag_answer_correct, llm_answer_check = evaluate_multiple_choice_answer_correctness(llm, sample, answer)
+        else:
+            flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(llm, sample, answer)
+        log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
+        log_dict[sample["idx"]]["flag_answer_correct"] = flag_answer_correct
+        log_dict[sample["idx"]]["answer_sampling_list"] = [answer]
 
     # Compute entropy
     clean_entropy = compute_entropy(outputs).item()
@@ -298,6 +300,7 @@ def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
     k_patches = int(k_percent / 100 * visual_token_positions.shape[0])
     if not blur_key_regions:
         k_patches = int((100 - k_percent) / 100 * visual_token_positions.shape[0])
+    # k_patches = 3
     top_k_indices = torch.topk(sum_attention_over_visual_tokens, k_patches).indices
     top_k_visual_token_positions = visual_token_positions[top_k_indices]
     positions_to_zero = _resolve_positions_to_zero(
@@ -337,11 +340,22 @@ def estimate_uncertainty_by_vauq(args, lvlm, sample, llm, log_dict):
         inference_temp=args.inference_temp,
     )
     masked_entropy = compute_entropy(outputs_with_masked_visual_tokens).item()
+    if use_masked_answer:
+        answer = masked_answer
+        log_dict[sample["idx"]]["answer"] = answer
+        flag_answer_correct = True
+        if is_choice_question(args, sample):
+            flag_answer_correct, llm_answer_check = evaluate_multiple_choice_answer_correctness(llm, sample, answer)
+        else:
+            flag_answer_correct, llm_answer_check = evaluate_answer_correctness_by_llm(llm, sample, answer)
+        log_dict[sample["idx"]]["llm_answer_check"] = llm_answer_check
+        log_dict[sample["idx"]]["flag_answer_correct"] = flag_answer_correct
+        log_dict[sample["idx"]]["answer_sampling_list"] = [answer]
 
     # Log the results
     log_dict[sample["idx"]]["blur_key_regions"] = blur_key_regions
     log_dict[sample["idx"]]["vauq_mask_mode"] = mask_mode
-    log_dict[sample["idx"]]["masked_answer"] = masked_answer
+    log_dict[sample["idx"]]["masked_answer"] = masked_answer if not use_masked_answer else answer
     log_dict[sample["idx"]]["clean_entropy"] = clean_entropy
     log_dict[sample["idx"]]["masked_entropy"] = masked_entropy
     log_dict[sample["idx"]]["image_score"] = masked_entropy - clean_entropy

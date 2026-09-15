@@ -89,7 +89,7 @@ def parse_args():
     parser.add_argument("--use_fastest", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--lvlm", type=str, default="Qwen2.5-VL-7B-Instruct")
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--benchmark", type=str, default="ViLP_captioning")
+    parser.add_argument("--benchmark", type=str, default="ViLP")
     parser.add_argument(
         "--llm",
         type=str,
@@ -99,7 +99,7 @@ def parse_args():
     parser.add_argument(
         "--uncertainty",
         type=str,
-        default="avg_ent",
+        default="vauq",
         help=(
             "Uncertainty method. You can also use combined aliases like "
             "nll_max, nll_avg, avg_ent, max_ent, avg_prob, max_prob, "
@@ -213,7 +213,7 @@ def parse_args():
         "--vse_mask_percents",
         type=float,
         nargs="+",
-        default=[10, 20, 30, 40],
+        default=[10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
         help=(
             "For vse_masked: progressive fractions of top-attended visual tokens "
             "to black out when building the perturbed image list."

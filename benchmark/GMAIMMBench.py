@@ -98,6 +98,7 @@ class GMAIMMBench:
     def retrieve(self, idx):
         row = self.ds.iloc[idx]
         question = str(row["question"])
+        question += "\n"
         choices = ""
         choice_numbers = ""
         num_c = 0
@@ -109,18 +110,14 @@ class GMAIMMBench:
             choice_numbers += f"({i}), "
             num_c += 1
         choice_numbers = choice_numbers[:-2]
-        domain = row["modality"]
-
-        prompt = f"You are answering a clinical question in the {domain} domain.\n"
-        prompt += f"Question: {question}\n"
-        prompt += f"Options:\n{choices}\n"
-        prompt += (
-            f"Instructions: This is a single choice question. Answer only one word with a choice number.\n"
+        question += choices
+        question += "\n"
+        question += (
+            f"This is a single choice question. Answer only one word with a choice number.\n"
             f"You answer must be of the format: Answer: (<choice number>).\n"
             f"Your answer must be one of: {choice_numbers}.\n"
-            f"Example: Answer: (1).\n"
+            f"Example: Answer: (1)."
         )
-        prompt += f"Answer: "
 
         answer = str(row["answer"]).strip().upper()
         answer_letters = [c for c in answer if c in "ABCDE"]
@@ -129,7 +126,7 @@ class GMAIMMBench:
         result = {
             "idx": idx,
             "img": self._decode_image(row["image"]),
-            "question": prompt,
+            "question": question,
             "gt_answer": str(gt_answer),
             "num_c": num_c,
         }

@@ -28,7 +28,7 @@ def perturbation_of_visual_prompt_vse_masked(args, lvlm, sample, inputs, outputs
         lvlm.model, lvlm.processor, inputs, outputs, args.lvlm, device
     )
 
-    percents = list(getattr(args, "vse_mask_percents", [10, 20, 30, 40]))
+    percents = list(getattr(args, "vse_mask_percents", [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]))
     max_percent = max(percents)
     n_tokens = int(visual_token_positions.shape[0])
     if n_tokens == 0:
@@ -86,6 +86,8 @@ def visual_semantic_entropy(args, lvlm, sample, llm, log_dict, perturbed_img_lis
 
 
 def estimate_uncertainty_by_vse_masked(args, lvlm, sample, llm, log_dict):
+    args.blur_key_regions = False
+    args.vauq_mask_mode = "image"
     """VSE with progressive top-token black-out instead of Gaussian noise."""
     answer, inputs, outputs, _answers = lvlm.generate(
         sample["img"],
