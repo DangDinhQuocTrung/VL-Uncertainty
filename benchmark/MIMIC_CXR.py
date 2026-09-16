@@ -3,11 +3,11 @@ import json
 import numpy as np
 
 
-class HAM10000:
+class MIMIC_CXR:
 
     def __init__(self):
-        self.image_dir = "/work3/dida/dataset/HAM10000/images"
-        self.qa_path = "/work3/dida/dataset/CARES/data/HAM10000/HAM10000_factuality.jsonl"
+        self.image_dir = "/work3/dida/dataset/MIMIC-CXR/files"
+        self.qa_path = "/work3/dida/dataset/CARES/data/MIMIC-CXR/mimic_factuality.jsonl"
         with open(self.qa_path, "r") as f:
             self.qa_data = [json.loads(line) for line in f]
         print(len(self.qa_data), self.qa_data[0])
@@ -18,17 +18,16 @@ class HAM10000:
     def retrieve(self, idx):
         item = self.qa_data[idx]
         image_path = item["image"]
-        image_path = os.path.join(self.image_dir, os.path.basename(image_path))
+        image_path = os.path.join(self.image_dir, image_path)
 
         # Parse the clinical question out of the CARES template preamble.
         question = item["text"]
-        gender, age = item["gender"], item["age"]
+        gender, age, race = item["gender"], item["age"], item["race"]
 
         prompt = f"{question}\n"
-        prompt += f"Patient information: Gender: {gender}, Age: {age}\n"
+        prompt += f"Patient information: Gender: {gender}, Age: {age}, Race: {race}\n"
         prompt += (
-            "Instructions: Please answer in the following format: {letter}:{option text}. "
-            "Example: If the correct answer is 'B', the answer should be B:scalp.\n"
+            "Instructions: Please give a concise answer within three sentences.\n"
         )
         prompt += "Answer: "
 
@@ -36,10 +35,10 @@ class HAM10000:
             "idx": idx,
             "img": image_path,
             "question": prompt,
-            "gt_answer": item["fig_caption"],
+            "gt_answer": item["answer"],
             "gender": gender,
             "age": age,
-            "num_c": 4,
+            "race": race,
         }
         return result
 
@@ -47,13 +46,14 @@ class HAM10000:
 def plot_demographic_distribution():
     import matplotlib.pyplot as plt
 
-    qa_path = "/work3/dida/dataset/CARES/data/HAM10000/HAM10000_factuality.jsonl"
+    qa_path = "/work3/dida/dataset/CARES/data/MIMIC-CXR/mimic_factuality.jsonl"
     with open(qa_path, "r") as f:
         qa_data = [json.loads(line) for line in f]
 
     genders = [item["gender"] for item in qa_data]
     ages = np.array([item["age"] for item in qa_data])
-    print(len(genders), len(ages))
+    races = [item["race"] for item in qa_data]
+    print(len(genders), len(ages), len(races))
     plt.hist(genders, bins=len(set(genders)))
     plt.xlabel("Gender")
     plt.ylabel("Count")
@@ -66,6 +66,12 @@ def plot_demographic_distribution():
     plt.ylabel("Count")
     plt.title("Age Distribution")
     plt.savefig("exp/age_distribution.png")
+    plt.close()
+    plt.hist(races)
+    plt.xlabel("Race")
+    plt.ylabel("Count")
+    plt.title("Race Distribution")
+    plt.savefig("exp/race_distribution.png")
     plt.close()
 
 

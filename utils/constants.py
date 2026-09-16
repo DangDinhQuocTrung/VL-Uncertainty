@@ -12,6 +12,7 @@ from benchmark.MedVIGIL import MedVIGIL
 from benchmark.GMAIMMBench import GMAIMMBench
 from benchmark.FairVLMed import FairVLMed
 from benchmark.HAM10000 import HAM10000
+from benchmark.MIMIC_CXR import MIMIC_CXR
 from llm.Claude import Claude
 from llm.Gemma import Gemma
 from llm.Qwen import Qwen
@@ -69,6 +70,7 @@ BENCHMARK_MAP = {
     "GMAIMMBench": GMAIMMBench,
     "FairVLMed": FairVLMed,
     "HAM10000": HAM10000,
+    "MIMIC_CXR": MIMIC_CXR,
 }
 
 LLM_MAP = {
@@ -104,6 +106,7 @@ BENCHMARK_TYPE = {
     "GMAIMMBench": "MULTI_CHOICE",
     "FairVLMed": "FREE_FORM",
     "HAM10000": "MULTI_CHOICE",
+    "MIMIC_CXR": "FREE_FORM",
 }
 
 # Top-level keys in exp/log_*.json that are run metadata, not per-sample entries.

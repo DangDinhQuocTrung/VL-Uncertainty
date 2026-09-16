@@ -87,9 +87,9 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--quick_benchmark", type=lambda x: x.lower() == "true", default="False")
     parser.add_argument("--use_fastest", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--lvlm", type=str, default="Qwen2.5-VL-7B-Instruct")
+    parser.add_argument("--lvlm", type=str, default="medgemma-1.5-4b-it")
     parser.add_argument("--use_model_manager", type=lambda x: x.lower() == "true", default="False")
-    parser.add_argument("--benchmark", type=str, default="ViLP")
+    parser.add_argument("--benchmark", type=str, default="MIMIC_CXR")
     parser.add_argument(
         "--llm",
         type=str,
@@ -99,7 +99,7 @@ def parse_args():
     parser.add_argument(
         "--uncertainty",
         type=str,
-        default="vauq",
+        default="nll_max",
         help=(
             "Uncertainty method. You can also use combined aliases like "
             "nll_max, nll_avg, avg_ent, max_ent, avg_prob, max_prob, "
@@ -275,7 +275,7 @@ def parse_args():
     parser.add_argument(
         "--vauq_mask_mode",
         type=str,
-        default="hook",
+        default="image",
         choices=["hook", "image"],
         help=(
             "VAUQ ablation backend: 'hook' zeros selected visual-token hidden "
